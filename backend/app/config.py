@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         direct_url = os.getenv("DATABASE_URL")
         if direct_url:
+            if direct_url.startswith("postgres://"):
+                return direct_url.replace("postgres://", "postgresql://", 1)
             return direct_url
         from urllib.parse import quote_plus
         encoded_password = quote_plus(self.DB_PASSWORD)
