@@ -1,0 +1,34 @@
+/* Reset & base — MUI CssBaseline handles most of this */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.6);
+}
+
+/* Remove outline on MUI DataGrid rows */
+.MuiDataGrid-row:focus,
+.MuiDataGrid-cell:focus,
+.MuiDataGrid-cell:focus-within {
+  outline: none !important;
+}
