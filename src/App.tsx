@@ -27,7 +27,7 @@ const AppRoutes: React.FC = () => {
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/dashboard" element={<PrivateRoute element={<DashboardPage />} />} />
-      <Route path="/daily-report" element={<PrivateRoute element={user?.role === 'admin' ? <Navigate to="/dashboard" replace /> : <DailyReportPage />} />} />
+      <Route path="/daily-report" element={<PrivateRoute element={(user?.role === 'admin' || user?.role === 'chairman') ? <Navigate to="/dashboard" replace /> : <DailyReportPage />} />} />
       <Route path="/profile" element={<PrivateRoute element={<ProfilePage />} />} />
       <Route path="/settings" element={<PrivateRoute element={<SettingsPage />} />} />
       <Route path="*" element={<Navigate to="/login" replace />} />

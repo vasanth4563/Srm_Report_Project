@@ -10,7 +10,7 @@ import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
 import PhoneAndroidRoundedIcon from '@mui/icons-material/PhoneAndroidRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import Layout from '../components/Layout.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 
@@ -18,18 +18,16 @@ const ProfilePage: React.FC = () => {
   const theme = useTheme();
   const { user } = useAuth();
 
-  // Branch colour badge
-  const branchColor = user?.branch === 'Trichy' ? '#06b6d4' : '#6366f1';
-
+  // Deep Purple & Light Blue Palette:
   const infoCards = [
-    { icon: <BadgeRoundedIcon />,          label: 'Employee ID',       value: user?.id,                         color: '#6366f1' },
-    { icon: <PersonRoundedIcon />,         label: 'Full Name',         value: `${user?.title ?? ''} ${user?.name ?? ''}`.trim(), color: '#8b5cf6' },
-    { icon: <WorkRoundedIcon />,           label: 'Designation',       value: user?.designation,                color: '#06b6d4' },
-    { icon: <BusinessRoundedIcon />,       label: 'Institution / Unit',value: user?.institution,               color: '#10b981' },
-    { icon: <LocationOnRoundedIcon />,     label: 'Branch',            value: user?.branch || '—',             color: branchColor },
-    { icon: <EmailRoundedIcon />,          label: 'Email',             value: user?.email,                     color: '#f59e0b' },
-    { icon: <PhoneAndroidRoundedIcon />,   label: 'Mobile Number',     value: user?.mobile || '—',             color: '#ef4444' },
-    { icon: <VerifiedRoundedIcon />,       label: 'Status',            value: 'Active · Verified',             color: '#10b981' },
+    { icon: <BadgeRoundedIcon />,          label: 'Employee ID',       value: user?.id,                         color: '#4c248b' },
+    { icon: <PersonRoundedIcon />,         label: 'Full Name',         value: `${user?.title ?? ''} ${user?.name ?? ''}`.trim(), color: '#0284c7' },
+    { icon: <WorkRoundedIcon />,           label: 'Designation',       value: user?.designation,                color: '#38bdf8' },
+    { icon: <BusinessRoundedIcon />,       label: 'Institution / Unit',value: user?.institution,               color: '#4c248b' },
+    { icon: <LocationOnRoundedIcon />,     label: 'Branch',            value: user?.branch || '—',             color: '#0284c7' },
+    { icon: <EmailRoundedIcon />,          label: 'Email',             value: user?.email,                     color: '#38bdf8' },
+    { icon: <PhoneAndroidRoundedIcon />,   label: 'Mobile Number',     value: user?.mobile || '—',             color: '#4c248b' },
+    { icon: <CheckCircleRoundedIcon />,    label: 'Status',            value: 'Active',                       color: '#0284c7' },
   ];
 
   return (
@@ -40,7 +38,7 @@ const ProfilePage: React.FC = () => {
           <Card sx={{ mb: 3, borderRadius: '20px', overflow: 'hidden' }}>
             <Box sx={{
               height: 150,
-              background: 'linear-gradient(135deg,#6366f1 0%,#4f46e5 50%,#06b6d4 100%)',
+              background: 'linear-gradient(135deg, #4c248b 0%, #0284c7 50%, #38bdf8 100%)',
               position: 'relative',
             }}>
               {[{ size: 130, top: -35, right: 60 }, { size: 90, top: 25, right: 210 }].map((c, i) => (
@@ -61,9 +59,9 @@ const ProfilePage: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, mt: '-44px', mb: 2.5, flexWrap: 'wrap' }}>
                 <Avatar sx={{
                   width: 90, height: 90, fontSize: 30, fontWeight: 800,
-                  background: 'linear-gradient(135deg,#6366f1,#06b6d4)',
+                  background: 'linear-gradient(135deg, #4c248b 0%, #38bdf8 100%)',
                   border: `4px solid ${theme.palette.background.paper}`,
-                  boxShadow: '0 8px 24px rgba(99,102,241,0.4)',
+                  boxShadow: '0 8px 24px rgba(76, 36, 139, 0.35)',
                 }}>
                   {user?.avatar}
                 </Avatar>
@@ -72,7 +70,6 @@ const ProfilePage: React.FC = () => {
                     <Typography variant="h5" sx={{ fontWeight: 800 }}>
                       {user?.title} {user?.name}
                     </Typography>
-                    <VerifiedRoundedIcon sx={{ color: '#6366f1', fontSize: 20 }} />
                   </Box>
                   <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
                     {user?.designation} · {user?.institution}
@@ -90,7 +87,7 @@ const ProfilePage: React.FC = () => {
                       icon={<LocationOnRoundedIcon sx={{ fontSize: '14px !important' }} />}
                       label={user.branch}
                       size="small"
-                      sx={{ fontWeight: 700, background: alpha(branchColor, 0.12), color: branchColor }}
+                      sx={{ fontWeight: 700, background: alpha('#0284c7', 0.12), color: '#0284c7' }}
                     />
                   )}
                 </Box>
@@ -164,8 +161,8 @@ const ProfilePage: React.FC = () => {
                     </Grid>
                   )}
                   <Grid item xs={12} sm={6}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, borderRadius: '14px', background: alpha(branchColor, 0.07), border: `1px solid ${alpha(branchColor, 0.15)}` }}>
-                      <Box sx={{ width: 44, height: 44, borderRadius: '12px', background: alpha(branchColor, 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: branchColor }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, borderRadius: '14px', background: alpha('#FA8833', 0.07), border: `1px solid ${alpha('#FA8833', 0.15)}` }}>
+                      <Box sx={{ width: 44, height: 44, borderRadius: '12px', background: alpha('#FA8833', 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FA8833' }}>
                         <LocationOnRoundedIcon />
                       </Box>
                       <Box>

@@ -34,8 +34,8 @@ def sync_user_roles():
 sync_user_roles()
 
 app = FastAPI(
-    title="ReportSync API",
-    description="Backend API for Daily Report Management System",
+    title="SRM Group of Institutions API",
+    description="Backend API for SRM Group of Institutions (Chennai Ramapuram & Trichy) Dashboard Reports & Reviews",
     version="2.0"
 )
 

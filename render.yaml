@@ -3,7 +3,7 @@ services:
   # 1. FastAPI Backend Service
   # -------------------------------------------------------------
   - type: web
-    name: reportsync-backend
+    name: srm-reports-backend
     env: python
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -17,7 +17,7 @@ services:
   # 2. React Frontend Static Site
   # -------------------------------------------------------------
   - type: static
-    name: reportsync-frontend
+    name: srm-reports-frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:

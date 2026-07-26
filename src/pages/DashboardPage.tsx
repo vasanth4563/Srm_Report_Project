@@ -22,6 +22,15 @@ import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
+import KeyRoundedIcon from '@mui/icons-material/KeyRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import ExtensionRoundedIcon from '@mui/icons-material/ExtensionRounded';
+import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
+import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import { Switch, Tooltip } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
 import Layout from '../components/Layout.tsx';
@@ -45,10 +54,36 @@ const DashboardPage: React.FC = () => {
   // Dynamic statistics state
   const [reports, setReports] = useState<any[]>([]);
 
-  // Fetch user stats reports
+  // API Keys & Integrations state
+  const [apiKey, setApiKey] = useState('srm_live_9a8b7c6d5e4f3a2b1c8d');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [integrations, setIntegrations] = useState([
+    { id: 'srm_sync', name: 'SRM Central Data Sync', desc: 'Real-time synchronization with institutional portal', connected: true, icon: '🔄', status: 'Live · 2 mins ago' },
+    { id: 'email_notif', name: 'Automated Email Dispatcher', desc: 'Send daily summary and weekly reports to HOD/Dean', connected: true, icon: '📧', status: 'Active · Daily 5 PM' },
+    { id: 'teams_webhook', name: 'Teams & Slack Integration', desc: 'Push notifications for pending report deadlines', connected: true, icon: '💬', status: 'Connected' },
+    { id: 'rest_api', name: 'Export & Analytics REST API', desc: 'Access raw report JSON & CSV data feeds', connected: true, icon: '⚡', status: 'Active · v2.4 API' },
+  ]);
+
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(apiKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  const handleRegenerateKey = () => {
+    const randomHex = Array.from({ length: 20 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    setApiKey(`srm_live_${randomHex}`);
+  };
+
+  const toggleIntegration = (id: string) => {
+    setIntegrations(prev => prev.map(item => item.id === id ? { ...item, connected: !item.connected } : item));
+  };
+
+  // Fetch user stats reports directly from backend API
   useEffect(() => {
     const fetchStatsData = async () => {
-      if (!user || user.role === 'admin' || user.role === 'chairman') return;
+      if (!user) return;
       try {
         const data = await apiRequest<any[]>('/api/reports');
         setReports(data || []);
@@ -59,7 +94,7 @@ const DashboardPage: React.FC = () => {
     fetchStatsData();
   }, [user]);
 
-  // Compute stats metrics dynamically
+  // Compute stats metrics dynamically from backend API data
   const totalReportsCount = reports.length;
   const completedCount = reports.filter((r) => r.completed).length;
   const pendingCount = reports.filter((r) => !r.completed).length;
@@ -84,11 +119,11 @@ const DashboardPage: React.FC = () => {
   const missingReportsCount = Math.max(0, workingDaysElapsed - submittedDatesThisMonth.size);
 
   const statConfig = [
-    { label: 'Total Reports', value: totalReportsCount, change: 'Live', trendColor: '#10b981', icon: DescriptionRoundedIcon, gradient: 'linear-gradient(135deg,#6366f1,#4f46e5)' },
-    { label: 'This Week', value: thisWeekCount, change: 'Live', trendColor: '#10b981', icon: TodayRoundedIcon, gradient: 'linear-gradient(135deg,#06b6d4,#0891b2)' },
-    { label: 'Completed', value: completedCount, change: 'Live', trendColor: '#10b981', icon: VerifiedRoundedIcon, gradient: 'linear-gradient(135deg,#10b981,#059669)' },
-    { label: 'Pending Review', value: pendingCount, change: 'Live', trendColor: '#f59e0b', icon: PendingActionsRoundedIcon, gradient: 'linear-gradient(135deg,#f59e0b,#d97706)' },
-    { label: 'Missing Reports', value: missingReportsCount, change: missingReportsCount > 0 ? 'Action Needed' : 'Up to date', trendColor: missingReportsCount > 0 ? '#ef4444' : '#10b981', icon: WarningAmberRoundedIcon, gradient: 'linear-gradient(135deg,#ef4444,#dc2626)' },
+    { label: 'Total Reports', value: totalReportsCount, change: 'All-time entries', trendColor: '#4c248b', icon: DescriptionRoundedIcon, gradient: 'linear-gradient(135deg, #4c248b, #7c53c3)' },
+    { label: 'This Week', value: thisWeekCount, change: 'Recent 7 days', trendColor: '#0284c7', icon: TodayRoundedIcon, gradient: 'linear-gradient(135deg, #0284c7, #38bdf8)' },
+    { label: 'Completed', value: completedCount, change: 'Completed', trendColor: '#10b981', icon: VerifiedRoundedIcon, gradient: 'linear-gradient(135deg, #10b981, #059669)' },
+    { label: 'Pending Review', value: pendingCount, change: 'In Progress', trendColor: '#f59e0b', icon: PendingActionsRoundedIcon, gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+    { label: 'Missing Reports', value: missingReportsCount, change: missingReportsCount > 0 ? 'Action Required' : 'Up to Date', trendColor: missingReportsCount > 0 ? '#ef4444' : '#10b981', icon: WarningAmberRoundedIcon, gradient: 'linear-gradient(135deg, #ef4444, #dc2626)' },
   ];
 
   // Dialog and view details state
@@ -158,7 +193,10 @@ const DashboardPage: React.FC = () => {
       field: 'name', headerName: 'Full Name', flex: 1.2, minWidth: 160,
       renderCell: (p) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, height: '100%' }}>
-          <Avatar sx={{ width: 26, height: 26, fontSize: 10, fontWeight: 700, bgcolor: theme.palette.primary.main }}>
+          <Avatar sx={{
+            width: 26, height: 26, fontSize: 10, fontWeight: 700,
+            bgcolor: user?.role === 'chairman' ? '#b45309' : theme.palette.primary.main,
+          }}>
             {p.row.name.replace(/Dr\.|Mr\.|Ms\.|Mrs\.|Prof\./, '').trim().substring(0, 2).toUpperCase()}
           </Avatar>
           <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -176,7 +214,11 @@ const DashboardPage: React.FC = () => {
         return (
           <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 0.5, py: 1 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" sx={{ fontWeight: 800, color: val >= 80 ? '#10b981' : val >= 50 ? '#6366f1' : '#f59e0b', fontSize: 11 }}>
+              <Typography variant="caption" sx={{
+                fontWeight: 800,
+                color: val >= 80 ? '#10b981' : val >= 50 ? (user?.role === 'chairman' ? '#d97706' : '#6366f1') : '#f59e0b',
+                fontSize: 11
+              }}>
                 {val}%
               </Typography>
               <Typography variant="caption" sx={{ fontSize: 10, color: theme.palette.text.secondary }}>
@@ -192,7 +234,11 @@ const DashboardPage: React.FC = () => {
                 bgcolor: alpha(theme.palette.primary.main, 0.12),
                 '& .MuiLinearProgress-bar': {
                   borderRadius: 3,
-                  background: val >= 80 ? 'linear-gradient(90deg,#10b981,#059669)' : val >= 50 ? 'linear-gradient(90deg,#6366f1,#4f46e5)' : 'linear-gradient(90deg,#f59e0b,#d97706)',
+                  background: val >= 80
+                    ? 'linear-gradient(90deg,#10b981,#059669)'
+                    : val >= 50
+                    ? (user?.role === 'chairman' ? 'linear-gradient(90deg,#d97706,#b45309)' : 'linear-gradient(90deg,#6366f1,#4f46e5)')
+                    : 'linear-gradient(90deg,#f59e0b,#d97706)',
                 }
               }}
             />
@@ -223,7 +269,12 @@ const DashboardPage: React.FC = () => {
       renderCell: (p) => (
         <Button variant="contained" size="small"
           onClick={() => { setMenuUser(p.row); handleSelectReport('daily', p.row); }}
-          sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 700, fontSize: 11, py: 0.5, px: 1.5, background: 'linear-gradient(135deg,#6366f1,#4f46e5)' }}>
+          sx={{
+            borderRadius: '8px', textTransform: 'none', fontWeight: 700, fontSize: 11, py: 0.5, px: 1.5,
+            background: user?.role === 'chairman'
+              ? 'linear-gradient(135deg,#d97706,#b45309)'
+              : 'linear-gradient(135deg,#6366f1,#4f46e5)',
+          }}>
           View Data
         </Button>
       )
@@ -431,121 +482,246 @@ const DashboardPage: React.FC = () => {
     <Layout pageTitle="Dashboard">
       <Fade in timeout={500}>
         <Box>
-          {/* Welcome banner */}
-          <Box sx={{
-            mb: 3, p: { xs: 2.5, sm: 3.5 }, borderRadius: '20px',
-            background: 'linear-gradient(135deg,#6366f1 0%,#4f46e5 50%,#06b6d4 100%)',
-            position: 'relative', overflow: 'hidden',
-            boxShadow: '0 8px 32px rgba(99,102,241,0.35)',
-          }}>
-            {[{ size: 160, top: -40, right: 40 }, { size: 100, top: 20, right: 180 }, { size: 80, bottom: -20, right: 100 }].map((c, i) => (
-              <Box key={i} sx={{
-                position: 'absolute', width: c.size, height: c.size,
-                borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)',
-                top: c.top, right: c.right, bottom: (c as any).bottom, opacity: 0.15,
-              }} />
-            ))}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Avatar sx={{ width: 56, height: 56, fontSize: 20, fontWeight: 800, background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)' }}>
-                {user?.avatar}
-              </Avatar>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="h5" sx={{ color: '#fff', fontWeight: 800, mb: 0.25, fontSize: { xs: 18, sm: 22 } }}>
-                  Good morning, {user?.name?.split(' ')[0]}! 🌟
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                  Here's what's happening with your reports today.
-                </Typography>
-              </Box>
-              {/* Branch badge */}
-              {user?.branch && (
-                <Chip
-                  icon={<LocationOnRoundedIcon sx={{ fontSize: '14px !important', color: '#fff !important' }} />}
-                  label={user.branch}
-                  size="small"
-                  sx={{
-                    flexShrink: 0,
-                    background: 'rgba(255,255,255,0.22)',
-                    color: '#fff',
-                    fontWeight: 700,
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255,255,255,0.35)',
-                    fontSize: 12,
-                  }}
-                />
-              )}
-            </Box>
-          </Box>
+          {/* ═══════════════════════════════════════════════
+              CHAIRMAN — EXECUTIVE DESIGN
+          ═══════════════════════════════════════════════ */}
+          {user?.role === 'chairman' && (
+            <>
+              {/* Executive Split Banner */}
+              <Card sx={{
+                mb: 3, borderRadius: '24px', overflow: 'hidden',
+                background: theme.palette.mode === 'dark'
+                  ? 'linear-gradient(135deg,rgba(81,40,136,0.15) 0%,rgba(142,111,192,0.08) 100%)'
+                  : 'linear-gradient(135deg,rgba(81,40,136,0.06) 0%,rgba(250,136,51,0.04) 100%)',
+                border: `1.5px solid ${alpha('#512888', 0.18)}`,
+                boxShadow: '0 4px 24px rgba(81,40,136,0.08)',
+              }}>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+                  {/* Left — Gradient identity panel */}
+                  <Box sx={{
+                    p: { xs: 3, sm: 4 }, flex: '0 0 auto',
+                    background: 'linear-gradient(135deg, #4c248b 0%, #0284c7 50%, #38bdf8 100%)',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+                    minWidth: { md: 220 }, position: 'relative', overflow: 'hidden',
+                  }}>
+                    {[120, 80, 50].map((s, i) => (
+                      <Box key={i} sx={{ position: 'absolute', width: s, height: s, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', top: i * 30 - 20, right: i * 40 - 30, opacity: 0.3 }} />
+                    ))}
+                    <Avatar sx={{ width: 72, height: 72, fontSize: 28, fontWeight: 800, background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.5)', mb: 1.5 }}>
+                      {user?.avatar}
+                    </Avatar>
+                    <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: { xs: 18, sm: 20 }, textAlign: 'center' }}>
+                      {user?.name}
+                    </Typography>
+                    <Chip label="👑 Chairman" size="small" sx={{
+                      mt: 1, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700, fontSize: 11,
+                      border: '1px solid rgba(255,255,255,0.35)', backdropFilter: 'blur(8px)',
+                    }} />
+                  </Box>
+                  {/* Right — Details & quick info */}
+                  <Box sx={{ flex: 1, p: { xs: 2.5, sm: 3 }, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.5, fontSize: { xs: 18, sm: 22 } }}>
+                      Welcome back! 👑
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 2.5 }}>
+                      Your institutional overview and staff performance at a glance.
+                    </Typography>
+                    {/* Inline employee details as horizontal pills */}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                      {[
+                        { icon: <WorkRoundedIcon sx={{ fontSize: 15 }} />, text: user?.designation, color: '#4c248b' },
+                        { icon: <BusinessRoundedIcon sx={{ fontSize: 15 }} />, text: user?.institution, color: '#0284c7' },
+                        { icon: <PhoneAndroidRoundedIcon sx={{ fontSize: 15 }} />, text: user?.mobile, color: '#38bdf8' },
+                      ].map((item, i) => (
+                        <Box key={i} sx={{
+                          display: 'flex', alignItems: 'center', gap: 0.75,
+                          px: 1.5, py: 0.75, borderRadius: '10px',
+                          background: alpha(item.color, theme.palette.mode === 'dark' ? 0.12 : 0.06),
+                          border: `1px solid ${alpha(item.color, 0.18)}`,
+                        }}>
+                          <Box sx={{ color: item.color, display: 'flex' }}>{item.icon}</Box>
+                          <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 12 }}>{item.text || '—'}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                </Box>
+              </Card>
 
-          {/* Employee Info */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1.5, color: theme.palette.text.secondary, fontWeight: 600 }}>Employee Details</Typography>
-            <Grid container spacing={2}>
-              {[
-                { icon: <BadgeRoundedIcon />,         label: 'Name',               value: user?.name,              color: '#6366f1' },
-                { icon: <WorkRoundedIcon />,           label: 'Designation',         value: user?.designation,       color: '#06b6d4' },
-                { icon: <BusinessRoundedIcon />,       label: 'Institution / Unit',  value: user?.institution,       color: '#10b981' },
-                { icon: <LocationOnRoundedIcon />,     label: 'Branch',              value: user?.branch || '—',     color: branchColor },
-                { icon: <PhoneAndroidRoundedIcon />,   label: 'Mobile Number',       value: user?.mobile || '—',     color: '#ef4444' },
-              ].map((info) => (
-                <Grid item xs={12} sm={6} md={4} key={info.label} sx={{ display: 'flex' }}>
-                  <Card sx={{ width: '100%', height: '100%', borderRadius: '16px', border: `1px solid ${alpha(info.color, 0.2)}`, background: alpha(info.color, theme.palette.mode === 'dark' ? 0.08 : 0.04) }}>
-                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: '16px !important', width: '100%' }}>
-                      <Box sx={{ width: 42, height: 42, borderRadius: '12px', background: alpha(info.color, 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: info.color, flexShrink: 0 }}>
-                        {info.icon}
-                      </Box>
-                      <Box sx={{ overflow: 'hidden' }}>
-                        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block' }}>{info.label}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.value}</Typography>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
+            </>
+          )}
 
-          {/* Stats Overview for Regular Staff Users */}
-          {user?.role === 'user' && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1.5, color: theme.palette.text.secondary, fontWeight: 600 }}>Statistics Overview</Typography>
-              <Grid container spacing={2} columns={10}>
-                {statConfig.map((stat) => {
-                  const IconComponent = stat.icon;
-                  return (
-                    <Grid item xs={5} md={2} key={stat.label} sx={{ display: 'flex' }}>
-                      <Card sx={{
-                        borderRadius: '18px', overflow: 'hidden', position: 'relative',
-                        display: 'flex', flexDirection: 'column', width: '100%', minHeight: 190,
-                        '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 12px 40px rgba(99,102,241,0.2)' },
-                        transition: 'all 0.3s',
+          {/* ═══════════════════════════════════════════════
+              ADMIN — CLEAN COMMAND CENTER DESIGN
+          ═══════════════════════════════════════════════ */}
+          {user?.role === 'admin' && (
+            <>
+              {/* Compact Admin Banner */}
+              <Box sx={{
+                mb: 3, borderRadius: '20px', overflow: 'hidden',
+                background: 'linear-gradient(135deg, #4c248b 0%, #0284c7 50%, #38bdf8 100%)',
+                boxShadow: '0 8px 32px rgba(76,36,139,0.3)',
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'stretch', flexDirection: { xs: 'column', sm: 'row' } }}>
+                  {/* Left greeting */}
+                  <Box sx={{ flex: 1, p: { xs: 2.5, sm: 3 }, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{
+                      width: 52, height: 52, borderRadius: '16px', background: 'rgba(165,180,252,0.2)',
+                      border: '2px solid rgba(165,180,252,0.4)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0,
+                    }}>🛡️</Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800, fontSize: { xs: 17, sm: 20 } }}>
+                        Admin Control Panel
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(199,210,254,0.8)', display: 'block' }}>
+                        {user?.name} — {user?.designation}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  {/* Right — Quick info badges on the banner itself */}
+                  <Box sx={{
+                    display: 'flex', alignItems: 'center', gap: 1, px: { xs: 2.5, sm: 3 }, py: { xs: 1.5, sm: 0 },
+                    flexWrap: 'wrap', borderLeft: { sm: '1px solid rgba(165,180,252,0.15)' },
+                  }}>
+                    {[
+                      { icon: <BusinessRoundedIcon sx={{ fontSize: 14 }} />, text: user?.institution },
+                      { icon: <PhoneAndroidRoundedIcon sx={{ fontSize: 14 }} />, text: user?.mobile },
+                    ].map((b, i) => (
+                      <Box key={i} sx={{
+                        display: 'flex', alignItems: 'center', gap: 0.5, px: 1.25, py: 0.5,
+                        borderRadius: '8px', background: 'rgba(255,255,255,0.12)',
+                        border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)',
                       }}>
-                        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: stat.gradient }} />
-                        <CardContent sx={{ p: '20px !important', display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-                          <Box>
-                            <Box sx={{ width: 44, height: 44, borderRadius: '14px', background: stat.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', mb: 1.5, '& svg': { fontSize: 22 } }}>
-                              <IconComponent />
-                            </Box>
-                            <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1, mb: 0.75 }}>{stat.value}</Typography>
-                            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', minHeight: 32, lineHeight: 1.3 }}>
-                              {stat.label}
-                            </Typography>
+                        <Box sx={{ color: 'rgba(199,210,254,0.9)', display: 'flex' }}>{b.icon}</Box>
+                        <Typography variant="caption" sx={{ color: '#fff', fontWeight: 600, fontSize: 11 }}>{b.text || '—'}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Box>
+
+            </>
+          )}
+
+          {/* ═══════════════════════════════════════════════
+              STAFF USER — ORIGINAL DESIGN (unchanged)
+          ═══════════════════════════════════════════════ */}
+          {user?.role === 'user' && (
+            <>
+              {/* Welcome banner */}
+              <Box sx={{
+                mb: 3, p: { xs: 2.5, sm: 3.5 }, borderRadius: '20px',
+                background: 'linear-gradient(135deg,#6366f1 0%,#4f46e5 50%,#06b6d4 100%)',
+                position: 'relative', overflow: 'hidden',
+                boxShadow: '0 8px 32px rgba(99,102,241,0.35)',
+              }}>
+                {[{ size: 160, top: -40, right: 40 }, { size: 100, top: 20, right: 180 }, { size: 80, bottom: -20, right: 100 }].map((c, i) => (
+                  <Box key={i} sx={{
+                    position: 'absolute', width: c.size, height: c.size,
+                    borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)',
+                    top: c.top, right: c.right, bottom: (c as any).bottom, opacity: 0.15,
+                  }} />
+                ))}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ width: 56, height: 56, fontSize: 20, fontWeight: 800, background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)' }}>
+                    {user?.avatar}
+                  </Avatar>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="h5" sx={{ color: '#fff', fontWeight: 800, mb: 0.25, fontSize: { xs: 18, sm: 22 } }}>
+                      Good morning, {user?.name?.split(' ')[0]}! 🌟
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                      Here's what's happening with your reports today.
+                    </Typography>
+                  </Box>
+                  {user?.branch && (
+                    <Chip
+                      icon={<LocationOnRoundedIcon sx={{ fontSize: '14px !important', color: '#fff !important' }} />}
+                      label={user.branch} size="small"
+                      sx={{ flexShrink: 0, background: 'rgba(255,255,255,0.22)', color: '#fff', fontWeight: 700, backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.35)', fontSize: 12 }}
+                    />
+                  )}
+                </Box>
+              </Box>
+
+              {/* Employee Info */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ mb: 1.5, color: theme.palette.text.secondary, fontWeight: 600 }}>Employee Details</Typography>
+                <Grid container spacing={2} columns={{ xs: 1, sm: 2, md: 4 }}>
+                  {[
+                    { icon: <BadgeRoundedIcon />, label: 'Name & Designation', value: user?.designation ? `${user?.name} — ${user?.designation}` : user?.name, color: '#6366f1' },
+                    { icon: <BusinessRoundedIcon />, label: 'Institution / Unit', value: user?.institution, color: '#10b981' },
+                    { icon: <LocationOnRoundedIcon />, label: 'Branch', value: user?.branch || '—', color: branchColor },
+                    { icon: <PhoneAndroidRoundedIcon />, label: 'Mobile Number', value: user?.mobile || '—', color: '#ef4444' },
+                  ].map((info) => (
+                    <Grid item xs={1} sm={1} md={1} key={info.label} sx={{ display: 'flex' }}>
+                      <Card sx={{
+                        width: '100%', height: '100%', borderRadius: '16px',
+                        border: `1px solid ${alpha(info.color, 0.2)}`,
+                        background: alpha(info.color, theme.palette.mode === 'dark' ? 0.08 : 0.04),
+                        display: 'flex', flexDirection: 'column',
+                      }}>
+                        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: '16px !important', width: '100%', flex: 1 }}>
+                          <Box sx={{ width: 42, height: 42, borderRadius: '12px', background: alpha(info.color, 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: info.color, flexShrink: 0 }}>
+                            {info.icon}
                           </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pt: 0.5 }}>
-                            {stat.label === 'Missing Reports' && stat.value > 0 ? (
-                              <TrendingDownRoundedIcon sx={{ fontSize: 14, color: stat.trendColor }} />
-                            ) : (
-                              <TrendingUpRoundedIcon sx={{ fontSize: 14, color: stat.trendColor }} />
-                            )}
-                            <Typography variant="caption" sx={{ color: stat.trendColor, fontWeight: 600 }}>{stat.change}</Typography>
+                          <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block' }}>{info.label}</Typography>
+                            <Typography variant="body2" title={info.value || ''} sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.value || '—'}</Typography>
                           </Box>
                         </CardContent>
                       </Card>
                     </Grid>
-                  );
-                })}
-              </Grid>
-            </Box>
+                  ))}
+                </Grid>
+              </Box>
+
+              {/* Stats Overview */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ mb: 1.5, color: theme.palette.text.secondary, fontWeight: 600 }}>Statistics Overview</Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(5, 1fr)' }, gap: 2 }}>
+                  {statConfig.map((stat, index) => {
+                    const IconComponent = stat.icon;
+                    return (
+                      <Box key={stat.label} sx={{
+                        gridColumn: index === 4 ? { xs: '1 / -1', sm: 'span 1' } : 'span 1',
+                        display: 'flex', justifyContent: index === 4 ? { xs: 'center', sm: 'stretch' } : 'stretch',
+                      }}>
+                        <Card sx={{
+                          borderRadius: '18px', overflow: 'hidden', position: 'relative',
+                          display: 'flex', flexDirection: 'column',
+                          width: index === 4 ? { xs: 'calc(50% - 8px)', sm: '100%' } : '100%',
+                          minHeight: { xs: 140, sm: 170 },
+                          '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 12px 40px rgba(99,102,241,0.2)' },
+                          transition: 'all 0.3s',
+                        }}>
+                          <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: stat.gradient }} />
+                          <CardContent sx={{ p: { xs: '12px !important', sm: '16px !important' }, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                            <Box>
+                              <Box sx={{ width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 }, borderRadius: '12px', background: stat.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', mb: 1, '& svg': { fontSize: { xs: 18, sm: 20 } } }}>
+                                <IconComponent />
+                              </Box>
+                              <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1, mb: 0.5, fontSize: { xs: '1.4rem', sm: '1.8rem' } }}>{stat.value}</Typography>
+                              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', minHeight: { xs: 26, sm: 30 }, lineHeight: 1.2, fontSize: { xs: 11, sm: 12 } }}>
+                                {stat.label}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pt: 0.5 }}>
+                              {stat.label === 'Missing Reports' && stat.value > 0
+                                ? <TrendingDownRoundedIcon sx={{ fontSize: 13, color: stat.trendColor }} />
+                                : <TrendingUpRoundedIcon sx={{ fontSize: 13, color: stat.trendColor }} />}
+                              <Typography variant="caption" sx={{ color: stat.trendColor, fontWeight: 600, fontSize: { xs: 10, sm: 11 } }}>{stat.change}</Typography>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
+
+            </>
           )}
 
           {/* Executive Overview & Chairman Table */}
@@ -555,29 +731,29 @@ const DashboardPage: React.FC = () => {
               <Card sx={{
                 borderRadius: '20px',
                 border: user?.role === 'chairman'
-                  ? `1.5px solid ${alpha('#f59e0b', 0.3)}`
-                  : `1.5px solid ${alpha('#6366f1', 0.2)}`,
+                  ? `1.5px solid ${alpha('#FA8833', 0.3)}`
+                  : `1.5px solid ${alpha('#4338ca', 0.25)}`,
                 overflow: 'hidden',
               }}>
                 {/* Top accent bar */}
                 <Box sx={{
                   height: 4,
                   background: user?.role === 'chairman'
-                    ? 'linear-gradient(90deg, #f59e0b, #d97706, #b45309)'
-                    : 'linear-gradient(90deg, #6366f1, #4f46e5, #4338ca)',
+                    ? 'linear-gradient(90deg, #FA8833, #CE4200, #512888)'
+                    : 'linear-gradient(90deg, #312e81, #4338ca, #6366f1)',
                 }} />
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Box sx={{
                     width: 40, height: 40, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: user?.role === 'chairman'
-                      ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                      : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                      ? 'linear-gradient(135deg, #512888, #FA8833)'
+                      : 'linear-gradient(135deg, #312e81, #4338ca)',
                     color: '#fff', fontSize: 20,
                   }}>
                     {user?.role === 'chairman' ? '👑' : <PeopleAltRoundedIcon sx={{ fontSize: 20 }} />}
                   </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: user?.role === 'chairman' ? '#d97706' : '#6366f1' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: user?.role === 'chairman' ? '#512888' : '#4338ca' }}>
                       {user?.role === 'chairman' ? 'Staff Performance & Overall Progress' : 'Employee Reports Tracker'}
                     </Typography>
                     <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
@@ -598,9 +774,9 @@ const DashboardPage: React.FC = () => {
                         onChange={(e) => setBranchFilter(e.target.value)}
                         sx={{
                           borderRadius: '12px', fontWeight: 600, fontSize: 13,
-                          '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha('#f59e0b', 0.3) },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#f59e0b' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#d97706' },
+                          '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha('#FA8833', 0.3) },
+                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#FA8833' },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#CE4200' },
                         }}
                       >
                         <MenuItem value="All">🏢 All Branches</MenuItem>
@@ -687,30 +863,32 @@ const DashboardPage: React.FC = () => {
             maxWidth="md"
             fullWidth
           >
-            <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+            <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${theme.palette.divider}`, pb: user?.role === 'chairman' ? 2 : 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: user?.role === 'chairman' ? 0 : 1.5 }}>
                 <PeopleAltRoundedIcon color="primary" />
                 <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  {menuUser ? `${menuUser.name} (${menuUser.designation})` : 'User Table Data'}
+                  {menuUser ? `${menuUser.name} (${menuUser.designation}) ${user?.role === 'chairman' ? '— Executive Progress Overview' : ''}` : 'User Performance Summary'}
                 </Typography>
               </Box>
-              <Tabs
-                value={selectedReportType}
-                onChange={(_, val) => handleSelectReport(val)}
-                variant="scrollable"
-                scrollButtons="auto"
-                sx={{ '& .MuiTab-root': { fontWeight: 700, fontSize: 13, textTransform: 'none', py: 1 } }}
-              >
-                <Tab label="Daily Reports" value="daily" />
-                <Tab label="100 Days Goals" value="goals" />
-                <Tab label="Accomplishments" value="acc" />
-                <Tab label="Pending Work" value="pending" />
-                <Tab label="Weekly Plans" value="weekly" />
-              </Tabs>
+              {user?.role !== 'chairman' && (
+                <Tabs
+                  value={selectedReportType}
+                  onChange={(_, val) => handleSelectReport(val)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  sx={{ '& .MuiTab-root': { fontWeight: 700, fontSize: 13, textTransform: 'none', py: 1 } }}
+                >
+                  <Tab label="Daily Reports" value="daily" />
+                  <Tab label="100 Days Goals" value="goals" />
+                  <Tab label="Accomplishments" value="acc" />
+                  <Tab label="Pending Work" value="pending" />
+                  <Tab label="Weekly Plans" value="weekly" />
+                </Tabs>
+              )}
             </DialogTitle>
             <DialogContent dividers sx={{ p: 3 }}>
               {menuUser && (
-                <Card sx={{ mb: 3, p: 2, borderRadius: '16px', background: alpha(theme.palette.primary.main, 0.04), border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}` }}>
+                <Card sx={{ mb: user?.role === 'chairman' ? 0 : 3, p: 2.5, borderRadius: '16px', background: alpha(theme.palette.primary.main, 0.04), border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}` }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Individual Staff Overall Progress</Typography>
@@ -761,7 +939,7 @@ const DashboardPage: React.FC = () => {
                 </Card>
               )}
 
-              {renderDialogContent()}
+              {user?.role !== 'chairman' && renderDialogContent()}
             </DialogContent>
             <DialogActions sx={{ p: 2 }}>
               <Button variant="contained" onClick={() => setReportDialogOpen(false)}>Close</Button>

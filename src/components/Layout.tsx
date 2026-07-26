@@ -33,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children, pageTitle }) => {
       }}>
         <Topbar pageTitle={pageTitle} onMenuClick={handleMenuClick} />
         <Toolbar sx={{ minHeight: { xs: 60, sm: 72 } }} />
-        <Box sx={{ flex: 1, p: { xs: 2, sm: 3 }, overflow: 'auto' }}>
+        <Box sx={{ flex: 1, p: { xs: 1.5, sm: 3 }, overflow: 'auto' }}>
           {children}
         </Box>
       </Box>

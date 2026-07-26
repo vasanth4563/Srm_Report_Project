@@ -13,22 +13,24 @@ export const getTheme = (mode: 'light' | 'dark') =>
   createTheme({
     palette: {
       mode,
-      primary: { main: '#6366f1', light: '#818cf8', dark: '#4f46e5', contrastText: '#fff' },
-      secondary: { main: '#06b6d4', light: '#22d3ee', dark: '#0891b2' },
+      primary: { main: '#4c248b', light: '#7c53c3', dark: '#331662', contrastText: '#fff' },
+      secondary: { main: '#38bdf8', light: '#7dd3fc', dark: '#0284c7' },
+      warning: { main: '#FA8833', light: '#ffb763', dark: '#c45a00' },
+      error: { main: '#CE4200', light: '#f06222', dark: '#962e00' },
       background: {
-        default: mode === 'dark' ? '#0f0f17' : '#f4f6fc',
-        paper: mode === 'dark' ? '#1a1a2e' : '#ffffff',
+        default: '#ffffff',
+        paper: '#ffffff',
       },
       sidebar: {
-        bg: mode === 'dark' ? '#12121f' : '#1e1b4b',
+        bg: mode === 'dark' ? '#120a1f' : '#1e1136',
         text: '#ffffff',
-        active: '#6366f1',
-        hover: alpha('#6366f1', 0.15),
+        active: '#38bdf8',
+        hover: alpha('#38bdf8', 0.15),
       },
-      divider: mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)',
+      divider: mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(76,36,139,0.08)',
       text: {
-        primary: mode === 'dark' ? '#e2e8f0' : '#1e293b',
-        secondary: mode === 'dark' ? '#94a3b8' : '#64748b',
+        primary: mode === 'dark' ? '#f3f0f7' : '#1a0d30',
+        secondary: mode === 'dark' ? '#b3a5c9' : '#645480',
       },
     },
     typography: {
@@ -44,11 +46,11 @@ export const getTheme = (mode: 'light' | 'dark') =>
         styleOverrides: {
           root: { textTransform: 'none', fontWeight: 600, borderRadius: 10 },
           containedPrimary: {
-            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-            boxShadow: '0 4px 15px rgba(99,102,241,0.4)',
+            background: 'linear-gradient(135deg, #4c248b 0%, #0284c7 50%, #38bdf8 100%)',
+            boxShadow: '0 4px 15px rgba(76, 36, 139, 0.35)',
             '&:hover': {
-              background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)',
-              boxShadow: '0 6px 20px rgba(99,102,241,0.5)',
+              background: 'linear-gradient(135deg, #6233ab 0%, #38bdf8 100%)',
+              boxShadow: '0 6px 20px rgba(56, 189, 248, 0.45)',
             },
           },
         },
@@ -58,8 +60,8 @@ export const getTheme = (mode: 'light' | 'dark') =>
           root: {
             borderRadius: 16,
             boxShadow: mode === 'dark'
-              ? '0 4px 24px rgba(0,0,0,0.4)'
-              : '0 4px 24px rgba(99,102,241,0.08)',
+              ? '0 4px 24px rgba(0,0,0,0.45)'
+              : '0 4px 24px rgba(81, 40, 136, 0.08)',
           },
         },
       },
@@ -70,3 +72,4 @@ export const getTheme = (mode: 'light' | 'dark') =>
       },
     },
   });
+

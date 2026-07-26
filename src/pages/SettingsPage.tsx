@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Box, Card, CardContent, Typography, Switch, Divider,
-  Slider, alpha, useTheme, Fade, Chip, Button,
+  Slider, alpha, useTheme, Fade, Chip, Button, Grid,
 } from '@mui/material';
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
 import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
@@ -63,25 +63,25 @@ const SettingsPage: React.FC = () => {
             <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Manage your preferences, notifications, and account security.</Typography>
           </Box>
 
-          <SectionCard icon={<DarkModeRoundedIcon />} title="Appearance" color="#6366f1">
+          <SectionCard icon={<DarkModeRoundedIcon />} title="Appearance" color="#4c248b">
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>Dark Mode</Typography>
                 <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>Switch between light and dark interface</Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip label={mode === 'dark' ? 'Dark' : 'Light'} size="small" sx={{ background: alpha('#6366f1', 0.1), color: '#6366f1', fontWeight: 600 }} />
+                <Chip label={mode === 'dark' ? 'Dark' : 'Light'} size="small" sx={{ background: alpha('#4c248b', 0.1), color: '#4c248b', fontWeight: 600 }} />
                 <Switch checked={mode === 'dark'} onChange={toggleColorMode} color="primary" />
               </Box>
             </Box>
             <Divider sx={{ my: 2 }} />
             <Box>
               <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Font Size: {fontSize}px</Typography>
-              <Slider value={fontSize} min={12} max={20} step={1} marks onChange={(_, v) => setFontSize(v as number)} sx={{ color: '#6366f1' }} />
+              <Slider value={fontSize} min={12} max={20} step={1} marks onChange={(_, v) => setFontSize(v as number)} sx={{ color: '#4c248b' }} />
             </Box>
           </SectionCard>
 
-          <SectionCard icon={<NotificationsRoundedIcon />} title="Notifications" color="#06b6d4">
+          <SectionCard icon={<NotificationsRoundedIcon />} title="Notifications" color="#0284c7">
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {notifSettings.map((s, i) => (
                 <React.Fragment key={s.key}>
@@ -98,7 +98,7 @@ const SettingsPage: React.FC = () => {
             </Box>
           </SectionCard>
 
-          <SectionCard icon={<SecurityRoundedIcon />} title="Security & Privacy" color="#10b981">
+          <SectionCard icon={<SecurityRoundedIcon />} title="Security & Privacy" color="#38bdf8">
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
               {privacySettings.map((s, i) => (
                 <React.Fragment key={s.key}>

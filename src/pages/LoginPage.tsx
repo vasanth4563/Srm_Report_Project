@@ -3,7 +3,7 @@ import {
   Box, Card, CardContent, TextField, Button, Typography,
   IconButton, InputAdornment, Alert, Fade, CircularProgress,
   alpha, useTheme, Autocomplete, Divider, MenuItem, Select,
-  FormControl, InputLabel,
+  FormControl, InputLabel, createFilterOptions,
 } from '@mui/material';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
@@ -22,6 +22,7 @@ import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiRequest } from '../utils/api.ts';
+import BrandLogo from '../components/BrandLogo.tsx';
 
 const LoginPage: React.FC = () => {
   const theme = useTheme();
@@ -56,6 +57,8 @@ const LoginPage: React.FC = () => {
   const [showPwd, setShowPwd]           = useState(false);
   const [signInError, setSignInError]   = useState('');
   const [signingIn, setSigningIn]       = useState(false);
+  const [nameSearchInput, setNameSearchInput] = useState('');
+  const [nameSearchOpen, setNameSearchOpen]   = useState(false);
 
   // ── Sign-Up state
   const [form, setForm] = useState({
@@ -126,25 +129,21 @@ const LoginPage: React.FC = () => {
   // reset
   const resetSignUp = () => setForm({ title: 'Mr.', name: '', designation: '', institution: 'SRM Institute of Science and Technology', email: '', password: '', confirmPassword: '', branch: 'Ramapuram', mobile: '' });
 
-  // ── Blobs ───────────────────────────────────────────────────────────────────
-  const blobs = [
-    { top: '-10%', left: '-5%',  size: 500, color: 'rgba(99,102,241,0.15)', delay: '0s' },
-    { top: '60%',  right: '-10%',size: 400, color: 'rgba(6,182,212,0.12)',  delay: '2s' },
-    { top: '30%',  left: '50%',  size: 300, color: 'rgba(168,85,247,0.1)',   delay: '4s' },
-  ];
-
   return (
     <Box sx={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      position: 'relative', overflow: 'hidden',
-      background: 'linear-gradient(135deg,#e0e7ff 0%,#f0f9ff 50%,#faf5ff 100%)',
+      position: 'relative', overflow: 'hidden', p: 2,
+      background: '#ffffff',
     }}>
-      {/* Background blobs */}
-      {blobs.map((b, i) => (
+      {/* Background Soft Ambient Blobs */}
+      {[
+        { size: 450, top: '-120px', left: '-120px', bg: 'rgba(81, 40, 136, 0.05)', delay: '0s' },
+        { size: 400, bottom: '-100px', right: '-100px', bg: 'rgba(250, 136, 51, 0.06)', delay: '2s' },
+        { size: 300, top: '40%', right: '10%', bg: 'rgba(142, 111, 192, 0.06)', delay: '4s' },
+      ].map((b, i) => (
         <Box key={i} sx={{
           position: 'absolute', width: b.size, height: b.size, borderRadius: '50%',
-          background: b.color, filter: 'blur(80px)',
-          top: b.top, left: b.left, right: (b as any).right,
+          background: b.bg, filter: 'blur(90px)', pointerEvents: 'none',
           animation: 'blobFloat 8s ease-in-out infinite alternate',
           animationDelay: b.delay,
           '@keyframes blobFloat': { '0%': { transform: 'translate(0,0)' }, '100%': { transform: 'translate(15px,15px)' } },
@@ -153,12 +152,11 @@ const LoginPage: React.FC = () => {
 
       <Fade in timeout={500} key={view}>
         <Card sx={{
-          width: { xs: '92%', sm: view === 'signup' ? 520 : 460 },
+          width: { xs: '94%', sm: view === 'signup' ? 520 : 460 },
           position: 'relative', zIndex: 10,
-          background: 'rgba(255,255,255,0.85)',
-          backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255,255,255,0.9)',
-          boxShadow: '0 24px 80px rgba(99,102,241,0.15)',
+          background: '#ffffff',
+          border: '1px solid rgba(81, 40, 136, 0.12)',
+          boxShadow: '0 16px 48px rgba(81, 40, 136, 0.08)',
           borderRadius: '24px',
           transition: 'width 0.3s ease',
         }}>
@@ -166,23 +164,15 @@ const LoginPage: React.FC = () => {
 
             {/* ── Brand ── */}
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3.5 }}>
-              <Box sx={{
-                width: 58, height: 58, borderRadius: '18px',
-                background: view === 'signup'
-                  ? 'linear-gradient(135deg,#06b6d4,#6366f1)'
-                  : 'linear-gradient(135deg,#6366f1,#06b6d4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1.5,
-                boxShadow: '0 8px 30px rgba(99,102,241,0.45)',
-                animation: 'logoPulse 3s ease-in-out infinite',
-                '@keyframes logoPulse': { '0%,100%': { boxShadow: '0 8px 30px rgba(99,102,241,0.45)' }, '50%': { boxShadow: '0 8px 40px rgba(99,102,241,0.8)' } },
-              }}>
-                {view === 'signup'
-                  ? <PersonAddRoundedIcon sx={{ color: '#fff', fontSize: 26 }} />
-                  : <AutoAwesomeIcon sx={{ color: '#fff', fontSize: 26 }} />}
+              <Box sx={{ mb: 1.5, transition: 'transform 0.3s ease', '&:hover': { transform: 'scale(1.05)' } }}>
+                <BrandLogo size={58} />
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 800 }}>ReportSync</Typography>
-              <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.25 }}>
-                SRM Daily Report Management System
+              <Typography variant="h5" sx={{ fontWeight: 800, fontSize: { xs: 20, sm: 22 } }}>SRM Group of Institutions</Typography>
+              <Typography variant="caption" sx={{ color: theme.palette.primary.main, fontWeight: 700, display: 'block', mt: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Chennai Ramapuram & Trichy
+              </Typography>
+              <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5 }}>
+                Dashboard Reports and Reviews
               </Typography>
             </Box>
 
@@ -211,21 +201,77 @@ const LoginPage: React.FC = () => {
               <>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>Welcome back 👋</Typography>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 2.5 }}>
-                  Select your name and enter your password to sign in.
+                  Type or search your name and enter your password to sign in.
                 </Typography>
 
                 {signInError && <Alert severity="error" sx={{ mb: 2, borderRadius: '10px' }}>{signInError}</Alert>}
 
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {/* Name dropdown */}
+                  {/* Name search & type field */}
                   <Autocomplete
+                    freeSolo
+                    open={nameSearchOpen && nameSearchInput.trim().length > 0}
+                    onOpen={() => {
+                      if (nameSearchInput.trim().length > 0) setNameSearchOpen(true);
+                    }}
+                    onClose={() => setNameSearchOpen(false)}
                     options={runtimeUsers}
-                    getOptionLabel={(u) => `${u.title} ${u.name}`}
-                    groupBy={(u) => u.title}
+                    filterOptions={createFilterOptions<any>({
+                      matchFrom: 'any',
+                      stringify: (option) => {
+                        if (typeof option === 'string') return option;
+                        return `${option.name} ${option.title || ''} ${option.email || ''} ${option.designation || ''}`;
+                      },
+                    })}
+                    getOptionLabel={(u) => typeof u === 'string' ? u : `${u.title ? u.title + ' ' : ''}${u.name}`}
+                    groupBy={(u) => typeof u === 'object' && u?.title ? u.title : ''}
                     value={selectedUser}
-                    onChange={(_, val) => { setSelectedUser(val); setLoginEmail(val?.email || ''); setSignInError(''); }}
+                    onChange={(_, val) => {
+                      if (typeof val === 'object' && val !== null) {
+                        setSelectedUser(val);
+                        setLoginEmail(val.email || '');
+                        setNameSearchInput(`${val.title ? val.title + ' ' : ''}${val.name}`);
+                      } else if (typeof val === 'string') {
+                        const match = runtimeUsers.find(
+                          (u) => u.name.toLowerCase().includes(val.toLowerCase()) || u.email.toLowerCase().includes(val.toLowerCase())
+                        );
+                        if (match) {
+                          setSelectedUser(match);
+                          setLoginEmail(match.email);
+                        } else {
+                          setSelectedUser(null);
+                          setLoginEmail(val);
+                        }
+                        setNameSearchInput(val);
+                      } else {
+                        setSelectedUser(null);
+                        setLoginEmail('');
+                        setNameSearchInput('');
+                      }
+                      setNameSearchOpen(false);
+                      setSignInError('');
+                    }}
+                    onInputChange={(_, newInputValue) => {
+                      setNameSearchInput(newInputValue);
+                      if (newInputValue.trim().length > 0) {
+                        setNameSearchOpen(true);
+                      } else {
+                        setNameSearchOpen(false);
+                        setSelectedUser(null);
+                        setLoginEmail('');
+                        return;
+                      }
+                      const match = runtimeUsers.find(
+                        (u) => u.name.toLowerCase().includes(newInputValue.toLowerCase()) || u.email.toLowerCase().includes(newInputValue.toLowerCase())
+                      );
+                      if (match) {
+                        setLoginEmail(match.email);
+                      } else {
+                        setLoginEmail(newInputValue);
+                      }
+                    }}
                     renderInput={(params) => (
-                      <TextField {...params} label="Select Your Name" placeholder="Search name..."
+                      <TextField {...params} label="Search Your Name" placeholder="Type your name..."
                         InputProps={{
                           ...params.InputProps,
                           startAdornment: (
@@ -240,23 +286,24 @@ const LoginPage: React.FC = () => {
                       />
                     )}
                     renderOption={(props, option) => (
-                      <Box component="li" {...props} key={option.id}
+                      <Box component="li" {...props} key={typeof option === 'object' ? option.id : option}
                         sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start !important', py: '10px !important' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.title} {option.name}</Typography>
-                        <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{option.designation}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{typeof option === 'object' ? `${option.title ? option.title + ' ' : ''}${option.name}` : option}</Typography>
+                        {typeof option === 'object' && option.designation && (
+                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{option.designation}</Typography>
+                        )}
                       </Box>
                     )}
                     noOptionsText="No matching staff found"
-                    isOptionEqualToValue={(a, b) => a.id === b.id}
                   />
 
-                  {/* Email input (auto-fills when selecting name or editable) */}
+                  {/* Email / ID input (Auto-filled or typed) */}
                   <TextField fullWidth label="Email / Staff ID" value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     InputProps={{
                       startAdornment: <InputAdornment position="start"><EmailRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} /></InputAdornment>,
                     }}
-                    placeholder="Select name above or type email/ID..."
+                    placeholder="Type or select name above..."
                   />
 
                   {/* Password */}
