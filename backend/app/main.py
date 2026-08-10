@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base, SessionLocal
 from .models import User
-from .routers import auth_router, report_router, goal_router, acc_router, pending_router, weekly_router, admin_router
+from .routers import auth_router, report_router, goal_router, acc_router, pending_router, weekly_router, admin_router, edit_request_router
 
 # Initialize tables
 Base.metadata.create_all(bind=engine)
@@ -56,6 +56,7 @@ app.include_router(acc_router.router)
 app.include_router(pending_router.router)
 app.include_router(weekly_router.router)
 app.include_router(admin_router.router)
+app.include_router(edit_request_router.router)
 
 @app.get("/")
 def read_root():

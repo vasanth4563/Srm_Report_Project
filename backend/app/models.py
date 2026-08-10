@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Date, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, Boolean, ForeignKey, Text, DateTime
 from sqlalchemy.orm import relationship
+from datetime import datetime
 from .database import Base
 
 class User(Base):
@@ -32,7 +33,7 @@ class DailyReport(Base):
     date = Column(Date, nullable=False)
     area = Column(String(100), nullable=False)
     report = Column(Text, nullable=False)
-    completed = Column(Boolean, default=False)
+    completed = Column(Boolean, default=True)
 
     user = relationship("User", back_populates="daily_reports")
 
@@ -46,7 +47,7 @@ class Goal100Days(Base):
     date = Column(Date, nullable=False)
     goal = Column(Text, nullable=False)
     responsible_person = Column(String(100), default="Self")
-    completed = Column(Boolean, default=False)
+    completed = Column(Boolean, default=True)
 
     user = relationship("User", back_populates="goals")
 
@@ -77,7 +78,7 @@ class PendingWork(Base):
     date_end = Column(Date)
     status_date = Column(Date)
     remarks = Column(Text)
-    completed = Column(Boolean, default=False)
+    completed = Column(Boolean, default=True)
 
     user = relationship("User", back_populates="pending_works")
 
@@ -90,6 +91,23 @@ class WeeklyPlan(Base):
     date = Column(Date, nullable=False)
     work = Column(Text, nullable=False)
     responsible_person = Column(String(100), default="Self")
-    completed = Column(Boolean, default=False)
+    completed = Column(Boolean, default=True)
 
     user = relationship("User", back_populates="weekly_plans")
+
+
+class EditRequest(Base):
+    __tablename__ = "edit_requests"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    module = Column(String(50), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_title = Column(String(255), nullable=True)
+    reason = Column(Text, nullable=True)
+    status = Column(String(20), default="pending")
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    approved_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")

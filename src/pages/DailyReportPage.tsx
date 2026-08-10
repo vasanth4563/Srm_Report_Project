@@ -5,7 +5,7 @@ import {
   Tab, Tabs, LinearProgress, Table, TableHead, TableBody,
   TableRow, TableCell, TableContainer, IconButton, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel,
-  CircularProgress
+  CircularProgress, TablePagination
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -26,6 +26,7 @@ import EmojiObjectsRoundedIcon from '@mui/icons-material/EmojiObjectsRounded';
 import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import Layout from '../components/Layout.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiRequest } from '../utils/api.ts';
@@ -38,6 +39,7 @@ type ReportRow = {
 
 type GoalRow = {
   id: number; day: number; date: string;
+  dateEnd?: string;
   goal: string; completed: boolean;
   responsiblePerson: string;
 };
@@ -77,20 +79,42 @@ const GOAL_END   = new Date('2026-09-08');
 const fmtDate = (d: Date) =>
   d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+const getReportDateBounds = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
+
+  const yesterdayObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const yYear = yesterdayObj.getFullYear();
+  const yMonth = String(yesterdayObj.getMonth() + 1).padStart(2, '0');
+  const yDay = String(yesterdayObj.getDate()).padStart(2, '0');
+  const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
+
+  const isAfter6PM = now.getHours() >= 18;
+  const minDateStr = isAfter6PM ? todayStr : yesterdayStr;
+  const maxDateStr = todayStr;
+
+  return { minDateStr, maxDateStr, todayStr, yesterdayStr, isAfter6PM };
+};
+
 const initialForm = { date: '', area: '', report: '' };
 const blankGoal = { day: '', date: '', goal: '', responsiblePerson: '' };
 const blankAcc = { area: '', work: '', dateStart: '', dateEnd: '' };
-const blankPending = { areas: '', particulars: '', responsiblePerson: '', dateStart: '', dateEnd: '', statusDate: '', remarks: '' };
+const blankPending = { areas: '', particulars: '', responsiblePerson: '', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' };
 const blankWeekly = { date: '', work: '', responsiblePerson: '' };
 
 // ─── Flag Cell ───────────────────────────────────────────────────────────────
-const FlagCell: React.FC<{ completed: boolean; onToggle: () => void }> = ({ completed, onToggle }) => (
-  <Tooltip title={completed ? 'Completed' : 'Pending — click to mark complete'} arrow>
-    <Box onClick={completed ? undefined : onToggle} sx={{
-      display: 'flex', flexDirection: 'row', alignItems: 'center',
-      cursor: completed ? 'default' : 'pointer', gap: 0.75,
-      '&:hover': completed ? {} : { transform: 'scale(1.08)' }, transition: 'transform 0.2s',
-    }}>
+const FlagCell: React.FC<{ completed: boolean; onToggle?: () => void }> = ({ completed, onToggle }) => (
+  <Tooltip title={completed ? 'Completed' : 'Pending'} arrow>
+    <Box 
+      onClick={onToggle}
+      sx={{
+        display: 'flex', flexDirection: 'row', alignItems: 'center',
+        cursor: onToggle ? 'pointer' : 'default', gap: 0.75,
+      }}
+    >
       <FlagRoundedIcon sx={{
         fontSize: 22,
         color: completed ? '#22c55e' : '#ef4444',
@@ -98,11 +122,19 @@ const FlagCell: React.FC<{ completed: boolean; onToggle: () => void }> = ({ comp
         transition: 'all 0.3s',
       }} />
       <Typography sx={{ fontSize: 11, fontWeight: 700, color: completed ? '#22c55e' : '#ef4444', lineHeight: 1, whiteSpace: 'nowrap' }}>
-        {completed ? 'DONE' : 'PENDING'}
+        {completed ? 'COMPLETED' : 'PENDING'}
       </Typography>
     </Box>
   </Tooltip>
 );
+
+const addDaysToDate = (baseDateISO: string, daysToAdd: number): string => {
+  if (!baseDateISO) return '';
+  const d = new Date(baseDateISO);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + daysToAdd);
+  return d.toISOString().split('T')[0];
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const DailyReportPage: React.FC = () => {
@@ -111,11 +143,141 @@ const DailyReportPage: React.FC = () => {
 
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState(initialForm);
+  type ExcelGridRow = { id?: number; date: string; area: string; work: string };
+  const [reportGrid, setReportGrid] = useState<ExcelGridRow[]>([
+    { date: '', area: '', work: '' },
+    { date: '', area: '', work: '' },
+    { date: '', area: '', work: '' },
+    { date: '', area: '', work: '' }
+  ]);
   const [rows, setRows] = useState<ReportRow[]>([]);
+
+  const syncGridWithReports = (allReports: ReportRow[], targetDate: string) => {
+    const matching = allReports.filter((r) => r.date === targetDate);
+    const grid: ExcelGridRow[] = matching.map((m) => ({
+      id: m.id,
+      date: m.date,
+      area: m.area,
+      work: m.report,
+    }));
+
+    while (grid.length < 4) {
+      grid.push({ date: targetDate, area: '', work: '' });
+    }
+
+    setReportGrid(grid);
+  };
   const [goals, setGoals] = useState<GoalRow[]>([]);
-  const [snack, setSnack] = useState({ open: false, msg: '', severity: 'success' as 'success' | 'error' });
+
+  type GoalGridRow = { id?: number; day: string; date: string; dateEnd: string; goal: string };
+  const [goalGrid, setGoalGrid] = useState<GoalGridRow[]>(() => {
+    const today = getReportDateBounds().todayStr;
+    return [
+      { day: '1', date: today, dateEnd: today, goal: '' },
+      { day: '2', date: addDaysToDate(today, 1), dateEnd: addDaysToDate(today, 1), goal: '' },
+      { day: '3', date: addDaysToDate(today, 2), dateEnd: addDaysToDate(today, 2), goal: '' },
+      { day: '4', date: addDaysToDate(today, 3), dateEnd: addDaysToDate(today, 3), goal: '' },
+    ];
+  });
+
+  const syncGridWithGoals = (allGoals: GoalRow[]) => {
+    const grid: GoalGridRow[] = allGoals.map((g, idx) => ({
+      id: g.id,
+      day: String(g.day || idx + 1),
+      date: g.date,
+      dateEnd: g.dateEnd || g.date,
+      goal: g.goal,
+    }));
+
+    const today = getReportDateBounds().todayStr;
+    let lastDate = grid.length > 0 ? grid[grid.length - 1].date : today;
+
+    while (grid.length < 4) {
+      const nextDay = grid.length + 1;
+      lastDate = grid.length > 0 ? addDaysToDate(lastDate, 1) : today;
+      grid.push({ day: String(nextDay), date: lastDate, dateEnd: lastDate, goal: '' });
+    }
+
+    setGoalGrid(grid);
+  };
+  const [snack, setSnack] = useState({ open: false, msg: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
   const [errors, setErrors] = useState<Partial<typeof form>>({});
   const [loading, setLoading] = useState(false);
+
+  // Request Access State
+  const [requestAccessDialogOpen, setRequestAccessDialogOpen] = useState(false);
+  const [requestTarget, setRequestTarget] = useState<{ module: string; itemId: number; title: string } | null>(null);
+  const [requestReason, setRequestReason] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+
+  const handleCheckAndOpenEdit = async (module: string, itemId: number, title: string, openEditDialog: () => void) => {
+    if (user?.role === 'admin' || user?.role === 'chairman') {
+      openEditDialog();
+      return;
+    }
+
+    try {
+      const res = await apiRequest<any>(`/api/edit-requests/check-permission?module=${module}&item_id=${itemId}`);
+      if (res?.can_edit) {
+        setSnack({
+          open: true,
+          msg: `Edit Access Granted by Admin! (Active 24h Pass)`,
+          severity: 'success'
+        });
+        openEditDialog();
+      } else if (res?.status === 'pending') {
+        setSnack({
+          open: true,
+          msg: 'Your edit request is pending Admin approval. Please wait for Admin to approve.',
+          severity: 'warning'
+        });
+      } else {
+        setRequestTarget({ module, itemId, title });
+        setRequestReason('');
+        setRequestAccessDialogOpen(true);
+      }
+    } catch (err) {
+      setRequestTarget({ module, itemId, title });
+      setRequestReason('');
+      setRequestAccessDialogOpen(true);
+    }
+  };
+
+  const handleSendEditRequest = async () => {
+    if (!requestTarget) return;
+    setSubmittingRequest(true);
+    try {
+      await apiRequest('/api/edit-requests', {
+        method: 'POST',
+        bodyData: {
+          module: requestTarget.module,
+          item_id: requestTarget.itemId,
+          item_title: requestTarget.title,
+          reason: requestReason.trim() || 'Requesting edit access for submitted entry.'
+        }
+      });
+      setRequestAccessDialogOpen(false);
+      setSnack({
+        open: true,
+        msg: 'Edit request sent to Admin! Admin has to accept your request for 24-hour edit access.',
+        severity: 'info'
+      });
+    } catch (err: any) {
+      setSnack({ open: true, msg: err.message || 'Failed to send edit request', severity: 'error' });
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
+
+  // Track which row IDs have already been edited for their dates (one-time edit enforcement)
+  const [editedDates, setEditedDates] = useState<Record<string, (string | number)[]>>(() => {
+    try {
+      const stored = localStorage.getItem(`edited_dates_${user?.empId || 'default'}`);
+      return stored ? JSON.parse(stored) : { goals: [], accomplishments: [], pending: [] };
+    } catch {
+      return { goals: [], accomplishments: [], pending: [] };
+    }
+  });
 
   // Tab 0 Edit Dialog State
   const [editReportDialogOpen, setEditReportDialogOpen] = useState(false);
@@ -131,11 +293,28 @@ const DailyReportPage: React.FC = () => {
   const [editAccDialogOpen, setEditAccDialogOpen] = useState(false);
   const [editAccDialogId, setEditAccDialogId] = useState<number | ''>('');
   const [editAccDialogForm, setEditAccDialogForm] = useState(blankAcc);
+  const [editAccDateDialog, setEditAccDateDialog] = useState<{ open: boolean; rowId: string | number; dateStart: string; dateEnd: string; work: string }>({
+    open: false,
+    rowId: '',
+    dateStart: '',
+    dateEnd: '',
+    work: '',
+  });
+
 
   // Tab 3 Edit Dialog State
   const [editPendingDialogOpen, setEditPendingDialogOpen] = useState(false);
   const [editPendingDialogId, setEditPendingDialogId] = useState<number | ''>('');
   const [editPendingDialogForm, setEditPendingDialogForm] = useState(blankPending);
+  const [editPendingDateDialog, setEditPendingDateDialog] = useState({
+    open: false,
+    rowId: '' as string | number,
+    dateStart: '',
+    dateEnd: '',
+    statusDate: '',
+    work: ''
+  });
+
 
   // Tab 4 Edit Dialog State
   const [editWeeklyDialogOpen, setEditWeeklyDialogOpen] = useState(false);
@@ -149,6 +328,12 @@ const DailyReportPage: React.FC = () => {
   // ── Accomplishment state ──
   const [accForm, setAccForm] = useState(blankAcc);
   const [accEntries, setAccEntries] = useState<AccomplishRow[]>([]);
+  const [dailyAccEntries, setDailyAccEntries] = useState<any[]>([]);
+  const [weeklyAccEntries, setWeeklyAccEntries] = useState<any[]>([]);
+  const [dailyPage, setDailyPage] = useState(0);
+  const [dailyRowsPerPage, setDailyRowsPerPage] = useState(10);
+  const [weeklyPage, setWeeklyPage] = useState(0);
+  const [weeklyRowsPerPage, setWeeklyRowsPerPage] = useState(10);
   const [accErrors, setAccErrors] = useState<Partial<typeof blankAcc>>({});
 
   // ── Pending & Priority state ──
@@ -156,12 +341,135 @@ const DailyReportPage: React.FC = () => {
   const [pendingEntries, setPendingEntries] = useState<PendingRow[]>([]);
   const [pendingErrors, setPendingErrors] = useState<Partial<typeof blankPending>>({});
 
+  type PendingGridRow = {
+    id?: number;
+    areas: string;
+    particulars: string;
+    responsiblePerson: string;
+    dateStart: string;
+    dateEnd: string;
+    statusDate: string;
+    completed: boolean;
+    remarks: string;
+  };
+
+  const [pendingGrid, setPendingGrid] = useState<PendingGridRow[]>(() => {
+    return [
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' }
+    ];
+  });
+
+  const syncGridWithPending = (allPending: PendingRow[]) => {
+    const grid: PendingGridRow[] = allPending.map((p) => ({
+      id: p.id,
+      areas: p.areas,
+      particulars: p.particulars,
+      responsiblePerson: p.responsiblePerson || 'Self',
+      dateStart: p.dateStart,
+      dateEnd: p.dateEnd || '',
+      statusDate: p.statusDate || '',
+      completed: p.completed,
+      remarks: p.remarks || '',
+    }));
+
+    while (grid.length < 4) {
+      grid.push({ areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' });
+    }
+
+    setPendingGrid(grid);
+  };
+
+  const handleAddPendingRows = () => {
+    setPendingGrid((prev) => [
+      ...prev,
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' }
+    ]);
+  };
+
   // ── Weekly Plan state ──
-  const [weekFrom, setWeekFrom] = useState('2026-06-01');
-  const [weekTo,   setWeekTo]   = useState('2026-06-06');
+  const [weekFrom, setWeekFrom] = useState(() => getReportDateBounds().todayStr);
+  const [weekTo,   setWeekTo]   = useState(() => addDaysToDate(getReportDateBounds().todayStr, 6));
   const [weeklyForm, setWeeklyForm]       = useState(blankWeekly);
   const [weeklyEntries, setWeeklyEntries] = useState<WeeklyPlanRow[]>([]);
   const [weeklyErrors, setWeeklyErrors]   = useState<Partial<typeof blankWeekly>>({});
+
+  type WeeklyGridRow = { id?: number; date: string; dateEnd: string; work: string };
+
+  const [weeklyGrid, setWeeklyGrid] = useState<WeeklyGridRow[]>([]);
+
+  const handleWeeklyGridDateChange = (idx: number, field: 'date' | 'dateEnd', newDate: string) => {
+    setWeeklyGrid((prev) => {
+      const updated = [...prev];
+      if (field === 'date') {
+        // When Starting Date changes, auto-set Ending Date to +6 days
+        const start = newDate;
+        const end = addDaysToDate(start, 6);
+        updated[idx] = { ...updated[idx], date: start, dateEnd: end };
+      } else {
+        // When Ending Date changes, just update it (UI constrains to within 7 days)
+        updated[idx] = { ...updated[idx], dateEnd: newDate };
+      }
+      return updated;
+    });
+  };
+
+  const syncGridWithWeekly = (allWeekly: WeeklyPlanRow[]) => {
+    const todayStr = getReportDateBounds().todayStr;
+
+    // Filter: only keep entries whose 7-day period hasn't ended yet
+    const activeEntries = allWeekly.filter((m) => {
+      const endDate = addDaysToDate(m.date, 6);
+      return endDate >= todayStr; // keep if ending date is today or in the future
+    });
+
+    if (activeEntries.length === 0) {
+      // All entries expired or no entries — show empty table for new week
+      const grid: WeeklyGridRow[] = [];
+      for (let i = 0; i < 4; i++) {
+        grid.push({ date: '', dateEnd: '', work: '' });
+      }
+      setWeeklyGrid(grid);
+      return;
+    }
+
+    const grid: WeeklyGridRow[] = activeEntries.map((m) => ({
+      id: m.id,
+      date: m.date,
+      dateEnd: addDaysToDate(m.date, 6),
+      work: m.work,
+    }));
+
+    // Pad with empty rows if less than 4
+    while (grid.length < 4) {
+      grid.push({ date: '', dateEnd: '', work: '' });
+    }
+
+    setWeeklyGrid(grid);
+  };
+
+  const handleAddWeeklyRows = () => {
+    const todayStr = getReportDateBounds().todayStr;
+    setWeeklyGrid((prev) => {
+      const lastRow = prev[prev.length - 1];
+      const lastEnd = lastRow?.dateEnd || (lastRow?.date ? addDaysToDate(lastRow.date, 6) : todayStr);
+
+      const week1Start = addDaysToDate(lastEnd, 1);
+      const week1End = addDaysToDate(week1Start, 6);
+
+      const week2Start = addDaysToDate(week1End, 1);
+      const week2End = addDaysToDate(week2Start, 6);
+
+      return [
+        ...prev,
+        { date: week1Start, dateEnd: week1End, work: '' },
+        { date: week2Start, dateEnd: week2End, work: '' }
+      ];
+    });
+  };
 
   // ── API Fetch Handlers ──
   const fetchReports = async () => {
@@ -175,9 +483,10 @@ const DailyReportPage: React.FC = () => {
         date: r.date,
         area: r.area,
         report: r.report,
-        completed: r.completed,
+        completed: r.completed ?? true,
       }));
       setRows(mapped);
+      syncGridWithReports(mapped, form.date || getReportDateBounds().todayStr);
     } catch (err) {
       console.error(err);
     } finally {
@@ -193,11 +502,13 @@ const DailyReportPage: React.FC = () => {
         id: g.id,
         day: g.day,
         date: g.date,
+        dateEnd: g.date_end || g.date,
         goal: g.goal,
-        completed: g.completed,
+        completed: g.completed ?? true,
         responsiblePerson: g.responsible_person || 'Self',
       }));
       setGoals(mapped);
+      syncGridWithGoals(mapped);
     } catch (err) {
       console.error(err);
     } finally {
@@ -208,16 +519,48 @@ const DailyReportPage: React.FC = () => {
   const fetchAccomplishments = async () => {
     setLoading(true);
     try {
-      const data = await apiRequest<any[]>('/api/accomplishments');
-      const mapped = data.map((a) => ({
-        id: a.id,
-        area: a.area,
-        work: a.work,
-        dateStart: a.date_start,
-        dateEnd: a.date_end,
-        completed: a.completed ?? true,
-      }));
-      setAccEntries(mapped);
+      const [reportsData, weeklyData, accData] = await Promise.all([
+        apiRequest<any[]>('/api/reports'),
+        apiRequest<any[]>('/api/weekly'),
+        apiRequest<any[]>('/api/accomplishments')
+      ]);
+
+      const dailyFromReports = reportsData
+        .filter((r) => r.completed === true || r.completed === undefined)
+        .map((r) => ({
+          id: r.id,
+          area: r.area,
+          work: r.report,
+          date: r.date,
+          completed: true
+        }));
+
+      const directAccs = accData
+        .filter((a) => a.completed === true || a.completed === undefined)
+        .map((a) => ({
+          id: a.id,
+          area: a.area,
+          work: a.work,
+          date: a.date_start,
+          completed: true
+        }));
+
+      const allDaily = [...dailyFromReports, ...directAccs];
+      allDaily.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+      const weeklyMapped = weeklyData
+        .map((w) => ({
+          id: w.id,
+          dateStart: w.date,
+          dateEnd: addDaysToDate(w.date, 6),
+          work: w.work,
+          completed: true
+        }));
+      weeklyMapped.sort((a, b) => (b.dateStart || '').localeCompare(a.dateStart || ''));
+
+      setDailyAccEntries(allDaily);
+      setWeeklyAccEntries(weeklyMapped);
+      setAccEntries(allDaily);
     } catch (err) {
       console.error(err);
     } finally {
@@ -247,9 +590,10 @@ const DailyReportPage: React.FC = () => {
         dateEnd: p.date_end || '',
         statusDate: p.status_date || '',
         remarks: p.remarks || '',
-        completed: p.completed ?? false,
+        completed: p.completed ?? true,
       }));
       setPendingEntries(mapped);
+      syncGridWithPending(mapped);
     } catch (err) {
       console.error(err);
     } finally {
@@ -275,9 +619,10 @@ const DailyReportPage: React.FC = () => {
         date: w.date,
         work: w.work,
         responsiblePerson: w.responsible_person || 'Self',
-        completed: w.completed ?? false,
+        completed: w.completed ?? true,
       }));
       setWeeklyEntries(mapped);
+      syncGridWithWeekly(mapped);
     } catch (err) {
       console.error(err);
     } finally {
@@ -314,6 +659,46 @@ const DailyReportPage: React.FC = () => {
     return Object.keys(e).length === 0;
   };
 
+  const handleAddGoalGrid = async () => {
+    const newEntries = goalGrid.filter((row) => !row.id && row.goal.trim().length > 0);
+    if (newEntries.length === 0) {
+      setSnack({ open: true, msg: 'Please enter goal details in at least one row before submitting.', severity: 'warning' });
+      return;
+    }
+    try {
+      for (const item of newEntries) {
+        await apiRequest('/api/goals', {
+          method: 'POST',
+          bodyData: {
+            day: Number(item.day || 1),
+            date: item.date || getReportDateBounds().todayStr,
+            date_end: item.dateEnd || item.date || getReportDateBounds().todayStr,
+            goal: item.goal.trim(),
+            responsible_person: 'Self',
+            completed: true,
+          },
+        });
+      }
+      setSnack({ open: true, msg: `Successfully submitted ${newEntries.length} 100 Days Goal ${newEntries.length === 1 ? 'entry' : 'entries'}!`, severity: 'success' });
+      fetchGoals();
+    } catch (err: any) {
+      setSnack({ open: true, msg: err.message || 'Failed to submit goals', severity: 'error' });
+    }
+  };
+
+  const handleAddGoalRows = () => {
+    setGoalGrid((prev) => {
+      const lastDate = prev.length > 0 && prev[prev.length - 1].date ? prev[prev.length - 1].date : getReportDateBounds().todayStr;
+      const d1 = addDaysToDate(lastDate, 1);
+      const d2 = addDaysToDate(lastDate, 2);
+      return [
+        ...prev,
+        { day: String(prev.length + 1), date: d1, dateEnd: d1, goal: '' },
+        { day: String(prev.length + 2), date: d2, dateEnd: d2, goal: '' },
+      ];
+    });
+  };
+
   const handleAddGoal = async () => {
     if (!validateGoal()) return;
     const newDay = Number(goalForm.day);
@@ -329,7 +714,7 @@ const DailyReportPage: React.FC = () => {
           date: goalForm.date,
           goal: goalForm.goal,
           responsible_person: goalForm.responsiblePerson.trim() || 'Self',
-          completed: false
+          completed: true
         }
       });
       setSnack({ open: true, msg: `Goal added for Sl. No. ${newDay}!`, severity: 'success' });
@@ -351,9 +736,17 @@ const DailyReportPage: React.FC = () => {
             date: editGoalDialogForm.date,
             goal: editGoalDialogForm.goal,
             responsible_person: editGoalDialogForm.responsiblePerson || 'Self',
-            completed: false
+            completed: true
           }
         });
+        // Add to editedDates to enforce one-time edit limit
+        const updatedEdited = {
+          ...editedDates,
+          goals: [...(editedDates.goals || []), editGoalDialogId]
+        };
+        setEditedDates(updatedEdited);
+        localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+
         setEditGoalDialogOpen(false);
         setEditGoalDialogId('');
         setSnack({ open: true, msg: 'Goal updated successfully!', severity: 'success' });
@@ -428,36 +821,39 @@ const DailyReportPage: React.FC = () => {
   };
 
   // ── Tab 3 Pending Work Logic ──
-  const validatePending = () => {
-    const e: Partial<typeof blankPending> = {};
-    if (!pendingForm.areas.trim())       e.areas = 'Required';
-    if (!pendingForm.particulars.trim()) e.particulars = 'Required';
-    if (!pendingForm.dateStart)          e.dateStart = 'Required';
-    setPendingErrors(e);
-    return Object.keys(e).length === 0;
-  };
+  const handleSubmitPendingGrid = async () => {
+    const newEntries = pendingGrid.filter((row) => !row.id && (row.areas.trim().length > 0 || row.particulars.trim().length > 0));
+    if (newEntries.length === 0) {
+      setSnack({ open: true, msg: 'Please enter details in at least one row before submitting.', severity: 'warning' });
+      return;
+    }
 
-  const handleAddPending = async () => {
-    if (!validatePending()) return;
+    const hasMissingDate = newEntries.some((row) => !row.dateStart);
+    if (hasMissingDate) {
+      setSnack({ open: true, msg: 'Please select Date of Commencement for all rows being submitted.', severity: 'warning' });
+      return;
+    }
+
     try {
-      await apiRequest('/api/pending', {
-        method: 'POST',
-        bodyData: {
-          areas: pendingForm.areas,
-          particulars: pendingForm.particulars,
-          responsible_person: pendingForm.responsiblePerson,
-          date_start: pendingForm.dateStart,
-          date_end: pendingForm.dateEnd || null,
-          status_date: pendingForm.statusDate || null,
-          remarks: pendingForm.remarks
-        }
-      });
-      setSnack({ open: true, msg: 'Pending work added!', severity: 'success' });
-      setPendingForm(blankPending);
-      setPendingErrors({});
+      for (const row of newEntries) {
+        await apiRequest('/api/pending', {
+          method: 'POST',
+          bodyData: {
+            areas: row.areas.trim() || 'General',
+            particulars: row.particulars.trim() || 'Pending Work Details',
+            responsible_person: row.responsiblePerson || 'Self',
+            date_start: row.dateStart,
+            date_end: row.dateEnd || null,
+            status_date: row.statusDate || null,
+            remarks: row.remarks || '',
+            completed: row.completed
+          }
+        });
+      }
+      setSnack({ open: true, msg: 'Pending & Priority entries saved successfully!', severity: 'success' });
       fetchPending();
     } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to add pending item', severity: 'error' });
+      setSnack({ open: true, msg: err.message || 'Failed to submit entries', severity: 'error' });
     }
   };
 
@@ -473,7 +869,8 @@ const DailyReportPage: React.FC = () => {
             date_start: editPendingDialogForm.dateStart,
             date_end: editPendingDialogForm.dateEnd || null,
             status_date: editPendingDialogForm.statusDate || null,
-            remarks: editPendingDialogForm.remarks
+            remarks: editPendingDialogForm.remarks,
+            completed: editPendingDialogForm.completed
           }
         });
         setEditPendingDialogOpen(false);
@@ -486,6 +883,43 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
+  const handleSavePendingDates = async () => {
+    if (editPendingDateDialog.rowId !== '') {
+      try {
+        const row = pendingEntries.find(r => r.id === editPendingDateDialog.rowId);
+        if (!row) return;
+        await apiRequest(`/api/pending/${editPendingDateDialog.rowId}`, {
+          method: 'PUT',
+          bodyData: {
+            areas: row.areas,
+            particulars: row.particulars,
+            responsible_person: row.responsiblePerson || 'Self',
+            date_start: editPendingDateDialog.dateStart,
+            date_end: editPendingDateDialog.dateEnd || null,
+            status_date: editPendingDateDialog.statusDate || null,
+            remarks: row.remarks,
+            completed: row.completed
+          }
+        });
+        // Add to editedDates to enforce one-time edit limit
+        const updatedEdited = {
+          ...editedDates,
+          pending: [...(editedDates.pending || []), editPendingDateDialog.rowId]
+        };
+        setEditedDates(updatedEdited);
+        localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+
+        setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' });
+        setSnack({ open: true, msg: 'Dates updated successfully!', severity: 'success' });
+        fetchPending();
+      } catch (err: any) {
+        setSnack({ open: true, msg: err.message || 'Failed to update dates', severity: 'error' });
+      }
+    }
+  };
+
+
+
   // ── Tab 4 Weekly Plan Logic ──
   const validateWeekly = () => {
     const e: Partial<typeof blankWeekly> = {};
@@ -496,22 +930,43 @@ const DailyReportPage: React.FC = () => {
   };
 
   const handleAddWeekly = async () => {
-    if (!validateWeekly()) return;
+    const todayStr = getReportDateBounds().todayStr;
+    const filledRows = weeklyGrid.filter(r => r.work.trim());
+
+    if (filledRows.length === 0) {
+      setWeeklyErrors({ work: 'Please enter at least one Work detail in the Excel grid below.' });
+      return;
+    }
+
     try {
-      await apiRequest('/api/weekly', {
-        method: 'POST',
-        bodyData: {
-          date: weeklyForm.date,
-          work: weeklyForm.work,
-          responsible_person: weeklyForm.responsiblePerson || 'Self'
+      for (const row of filledRows) {
+        const rowDate = row.date || todayStr;
+        if (row.id) {
+          await apiRequest(`/api/weekly/${row.id}`, {
+            method: 'PUT',
+            bodyData: {
+              date: rowDate,
+              work: row.work.trim(),
+              responsible_person: 'Self'
+            }
+          });
+        } else {
+          await apiRequest('/api/weekly', {
+            method: 'POST',
+            bodyData: {
+              date: rowDate,
+              work: row.work.trim(),
+              responsible_person: 'Self'
+            }
+          });
         }
-      });
-      setSnack({ open: true, msg: 'Weekly plan entry added!', severity: 'success' });
-      setWeeklyForm(blankWeekly);
+      }
+      setSnack({ open: true, msg: `${filledRows.length} Weekly Plan entry row(s) saved successfully!`, severity: 'success' });
       setWeeklyErrors({});
       fetchWeekly();
+      fetchAccomplishments();
     } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to add weekly plan', severity: 'error' });
+      setSnack({ open: true, msg: err.message || 'Failed to save weekly plan', severity: 'error' });
     }
   };
 
@@ -542,31 +997,68 @@ const DailyReportPage: React.FC = () => {
   };
 
   // ── Tab 0 Daily Report logic ──
+  const handleAddRows = () => {
+    const defaultDate = form.date || getReportDateBounds().todayStr;
+    setReportGrid((prev) => [
+      ...prev,
+      { date: defaultDate, area: '', work: '' },
+      { date: defaultDate, area: '', work: '' }
+    ]);
+  };
+
   const handleReset = () => {
     setForm(initialForm);
+    const todayStr = getReportDateBounds().todayStr;
+    setReportGrid([
+      { date: todayStr, area: '', work: '' },
+      { date: todayStr, area: '', work: '' },
+      { date: todayStr, area: '', work: '' },
+      { date: todayStr, area: '', work: '' }
+    ]);
     setErrors({});
   };
 
   const handleSubmit = async () => {
+    const { minDateStr, maxDateStr, todayStr } = getReportDateBounds();
+    const defaultDate = form.date || todayStr;
     const e: Partial<typeof form> = {};
-    if (!form.area.trim()) e.area = 'Area is required';
-    if (!form.report.trim()) e.report = 'Report is required';
+
+    const filledRows = reportGrid.filter(r => r.area.trim() || r.work.trim());
+    if (filledRows.length === 0) {
+      e.report = 'Please enter at least one Area and Work row in the Excel grid below.';
+    }
+
     if (Object.keys(e).length > 0) {
       setErrors(e);
       return;
     }
+
     try {
-      await apiRequest('/api/reports', {
-        method: 'POST',
-        bodyData: {
-          date: form.date || new Date().toISOString().split('T')[0],
-          area: form.area,
-          report: form.report,
-          completed: false
+      for (const row of filledRows) {
+        const rowDate = row.date || defaultDate;
+        if (row.id) {
+          await apiRequest(`/api/reports/${row.id}`, {
+            method: 'PUT',
+            bodyData: {
+              date: rowDate,
+              area: row.area.trim() || 'General',
+              report: row.work.trim() || 'Work Completed',
+              completed: true
+            }
+          });
+        } else {
+          await apiRequest('/api/reports', {
+            method: 'POST',
+            bodyData: {
+              date: rowDate,
+              area: row.area.trim() || 'General',
+              report: row.work.trim() || 'Work Completed',
+              completed: true
+            }
+          });
         }
-      });
-      setSnack({ open: true, msg: 'Daily Report submitted!', severity: 'success' });
-      setForm(initialForm);
+      }
+      setSnack({ open: true, msg: `Daily Report entries saved successfully!`, severity: 'success' });
       setErrors({});
       fetchReports();
     } catch (err: any) {
@@ -583,7 +1075,7 @@ const DailyReportPage: React.FC = () => {
             date: editReportDialogForm.date,
             area: editReportDialogForm.area,
             report: editReportDialogForm.report,
-            completed: false
+            completed: true
           }
         });
         setEditReportDialogOpen(false);
@@ -633,9 +1125,9 @@ const DailyReportPage: React.FC = () => {
       ),
     },
     {
-      field: 'report', headerName: 'Report', flex: 2, minWidth: 200,
+      field: 'report', headerName: 'Work', flex: 2, minWidth: 200,
       renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" title={p.value as string} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.palette.text.secondary, fontSize: 13 }}>
+        <Typography variant="body2" title={p.value as string} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: theme.palette.text.secondary, fontSize: 13, py: 0.5, lineHeight: 1.5 }}>
           {p.value as string}
         </Typography>
       ),
@@ -651,36 +1143,30 @@ const DailyReportPage: React.FC = () => {
   // ── 100 Days columns ──
   const goalColumns: GridColDef[] = [
     {
-      field: 'day', headerName: 'Sl. No.', flex: 0.4, minWidth: 60,
+      field: 'day', headerName: 'Sl. No.', flex: 0.4, minWidth: 65,
       renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" sx={{ fontWeight: 800, color: '#6366f1', background: alpha('#6366f1', 0.1), borderRadius: '8px', px: 1.5, py: 0.25, fontSize: 12 }}>
+        <Typography variant="body2" sx={{ fontWeight: 800, color: '#6366f1', background: alpha('#6366f1', 0.12), borderRadius: '8px', px: 1.2, py: 0.3, fontSize: 13 }}>
           {String(p.value as number).padStart(3, '0')}
         </Typography>
       ),
     },
     {
-      field: 'date', headerName: 'Date', flex: 0.8, minWidth: 110,
+      field: 'date', headerName: 'Date', flex: 0.8, minWidth: 120,
       renderCell: (p: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <CalendarMonthRoundedIcon sx={{ fontSize: 15, color: theme.palette.text.secondary }} />
-          <Typography variant="body2" sx={{ fontSize: 13 }}>
+          <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: theme.palette.text.secondary }} />
+          <Typography variant="body2" sx={{ fontSize: 14, fontWeight: 700 }}>
             {new Date(p.value as string).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Typography>
         </Box>
       ),
     },
     {
-      field: 'goal', headerName: 'Work', flex: 2, minWidth: 180,
+      field: 'goal', headerName: 'Work', flex: 2, minWidth: 200,
       renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" title={p.value as string} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.palette.text.secondary, fontSize: 13 }}>
+        <Typography variant="body2" title={p.value as string} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.palette.text.primary, fontSize: 14.5, fontWeight: 600 }}>
           {p.value as string}
         </Typography>
-      ),
-    },
-    {
-      field: 'responsiblePerson', headerName: 'Responsible Person', flex: 1, minWidth: 130,
-      renderCell: (p: GridRenderCellParams) => (
-        <Chip label={p.value as string || 'Self'} size="small" color="primary" variant="outlined" sx={{ fontSize: 11, fontWeight: 600 }} />
       ),
     },
     {
@@ -697,7 +1183,7 @@ const DailyReportPage: React.FC = () => {
   const gridSx = {
     border: 'none',
     '& .MuiDataGrid-columnHeaders': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(99,102,241,0.04)', borderBottom: `1px solid ${theme.palette.divider}` },
-    '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, fontSize: 12, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+    '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 800, fontSize: 13.5, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5 },
     '& .MuiDataGrid-row:hover': { background: alpha(theme.palette.primary.main, 0.04) },
     '& .MuiDataGrid-cell': { borderBottom: `1px solid ${theme.palette.divider}`, alignItems: 'center', display: 'flex' },
     '& .MuiDataGrid-footerContainer': { borderTop: `1px solid ${theme.palette.divider}`, justifyContent: 'center' },
@@ -763,63 +1249,142 @@ const DailyReportPage: React.FC = () => {
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
                         Report Fields
                       </Typography>
-                      <TextField fullWidth label="Date" type="date" value={form.date} error={!!errors.date} helperText={errors.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} InputLabelProps={{ shrink: true }} sx={{ mb: 2.5 }} />
+                      {(() => {
+                        const bounds = getReportDateBounds();
+                        return (
+                          <TextField
+                            fullWidth
+                            label="Date"
+                            type="date"
+                            value={form.date || bounds.todayStr}
+                            error={!!errors.date}
+                            helperText={
+                              errors.date ||
+                              (bounds.isAfter6PM
+                                ? "⏰ Submission for yesterday closed at 6:00 PM today. Previous dates are disabled."
+                                : "⏰ Submissions allowed until 6:00 PM of the next day. Older dates are disabled.")
+                            }
+                            inputProps={{
+                              min: bounds.minDateStr,
+                              max: bounds.maxDateStr,
+                            }}
+                            onChange={(e) => {
+                              const newDate = e.target.value;
+                              setForm((p) => ({ ...p, date: newDate }));
+                              syncGridWithReports(rows, newDate);
+                            }}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ mb: 2.5 }}
+                          />
+                        );
+                      })()}
 
-                      {/* Compose layout */}
-                      <Box sx={{
-                        border: `1px solid ${errors.area || errors.report ? '#ef4444' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e0e0e0'}`,
-                        borderRadius: '4px',
-                        background: theme.palette.mode === 'dark' ? '#1e1e2e' : '#fff',
-                        overflow: 'hidden',
-                      }}>
-                        <Box component="label" sx={{ display: 'block', borderBottom: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8e8e8'}`, cursor: 'text' }}>
-                          <Box component="input" placeholder="Subject / Area" value={form.area} error={!!errors.area}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, area: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', px: 2, py: 1.5, fontSize: 15, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? '#7986cb' : '#4a90a4', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box component="label" sx={{ display: 'block', cursor: 'text' }}>
-                          <Box component="textarea" placeholder="Report details..." value={form.report} error={!!errors.report} rows={6}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm((p) => ({ ...p, report: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', resize: 'none', px: 2, pt: 1.5, pb: 2, fontSize: 14, lineHeight: 1.85, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#c0c0c0', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box sx={{ px: 2, py: 0.75, borderTop: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f0f0f0'}`, display: 'flex', alignItems: 'center', background: theme.palette.mode === 'dark' ? 'transparent' : '#fafafa' }}>
-                          {(errors.area || errors.report) && <Typography sx={{ fontSize: 11, color: '#ef4444' }}>{errors.area || errors.report}</Typography>}
-                          <Typography sx={{ fontSize: 11, color: '#c0c0c0', ml: 'auto' }}>{form.report.length} characters</Typography>
-                        </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.text.secondary }}>
+                          Area & Work Details ({reportGrid.length} Rows)
+                        </Typography>i q
                       </Box>
+
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
+                        <Table size="small">
+                          <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
+                            <TableRow>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Sl. No.</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '22%', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '28%', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Area</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, py: 1.25, fontSize: 13.5 }}>Work Details</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {reportGrid.map((row, idx) => (
+                              <TableRow key={idx} sx={{ bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') : (idx % 2 === 0 ? 'transparent' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') }}>
+                                <TableCell sx={{ fontWeight: 800, textAlign: 'center', bgcolor: row.id ? (theme.palette.mode === 'dark' ? '#1e293b' : '#e2e8f0') : (theme.palette.mode === 'dark' ? '#0f172a' : '#f1f5f9'), color: theme.palette.text.secondary, borderRight: '1px solid #cbd5e1', fontSize: 13, verticalAlign: 'middle' }}>
+                                  {String(idx + 1).padStart(2, '0')}
+                                </TableCell>
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="input"
+                                    type="date"
+                                    readOnly={!!row.id}
+                                    disabled={!!row.id}
+                                    value={row.date || form.date || getReportDateBounds().todayStr}
+                                    min={getReportDateBounds().minDateStr}
+                                    max={getReportDateBounds().maxDateStr}
+                                    onChange={(e: any) => {
+                                      if (row.id) return;
+                                      const updated = [...reportGrid];
+                                      updated[idx].date = e.target.value;
+                                      setReportGrid(updated);
+                                    }}
+                                    sx={{
+                                      width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                      px: 1.5, py: 1.4, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary,
+                                      boxSizing: 'border-box', cursor: row.id ? 'not-allowed' : 'text',
+                                      '&:focus': { bgcolor: row.id ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)') }
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea"
+                                    rows={2}
+                                    readOnly={!!row.id}
+                                    disabled={!!row.id}
+                                    value={row.area}
+                                    onChange={(e: any) => {
+                                      if (row.id) return;
+                                      const updated = [...reportGrid];
+                                      updated[idx].area = e.target.value;
+                                      setReportGrid(updated);
+                                    }}
+                                    sx={{
+                                      width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                      resize: 'vertical', minHeight: 46,
+                                      px: 1.5, py: 1, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary,
+                                      boxSizing: 'border-box', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: row.id ? 'not-allowed' : 'text',
+                                      '&:focus': { bgcolor: row.id ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)') }
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ p: 0, verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea"
+                                    rows={2}
+                                    readOnly={!!row.id}
+                                    disabled={!!row.id}
+                                    value={row.work}
+                                    onChange={(e: any) => {
+                                      if (row.id) return;
+                                      const updated = [...reportGrid];
+                                      updated[idx].work = e.target.value;
+                                      setReportGrid(updated);
+                                    }}
+                                    sx={{
+                                      width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                      resize: 'vertical', minHeight: 46,
+                                      px: 1.5, py: 1, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary,
+                                      boxSizing: 'border-box', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: row.id ? 'not-allowed' : 'text',
+                                      '&:focus': { bgcolor: row.id ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)') }
+                                    }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      {errors.report && <Alert severity="error" sx={{ mb: 2, borderRadius: '8px' }}>{errors.report}</Alert>}
 
                       <Divider sx={{ my: 2.5 }} />
                       <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                         <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleSubmit} sx={{ px: 3 }}>
                           Submit Report
                         </Button>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => setEditReportDialogOpen(true)} sx={{ px: 3 }}>
+                        <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
+                          + Add 2 Rows
+                        </Button>
+                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => handleCheckAndOpenEdit('reports', rows[0]?.id || 1, rows[0]?.area || 'Daily Report', () => setEditReportDialogOpen(true))} sx={{ px: 3 }}>
                           Edit Data
                         </Button>
-                        <Button variant="text" startIcon={<CancelRoundedIcon />} onClick={handleReset} color="inherit" sx={{ px: 3, color: theme.palette.text.secondary }}>Cancel</Button>
                       </Box>
                     </CardContent>
-                  </Card>
-
-                  {/* Grid */}
-                  <Card sx={{ borderRadius: '20px' }}>
-                    <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>Report History</Typography>
-                        <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{rows.length} total records</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${completedReports} Done`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 600 }} />
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#ef4444 !important', fontSize: 14 }} />} label={`${rows.length - completedReports} Pending`} size="small" sx={{ background: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 600 }} />
-                      </Box>
-                    </Box>
-                    <Box sx={{ borderRadius: '0 0 20px 20px' }}>
-                      <DataGrid rows={rows} columns={reportColumns} autoHeight pageSizeOptions={[5, 10, 20]}
-                        initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-                        disableRowSelectionOnClick sx={gridSx} />
-                    </Box>
                   </Card>
                 </Box>
               )}
@@ -859,144 +1424,178 @@ const DailyReportPage: React.FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 700 }}>🎯 100 Days Goal Setup</Typography>
-                          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Enter goal details and click Submit to record it on your tracker.</Typography>
+                          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Enter goal details in rows and columns below.</Typography>
                         </Box>
                       </Box>
 
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
-                        Add Goal / Task
-                      </Typography>
-                      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth label="Sl. No. / Day" type="number" placeholder="e.g. 44"
-                            value={goalForm.day} error={!!goalErrors.day} helperText={goalErrors.day}
-                            onChange={(e) => setGoalForm((p) => ({ ...p, day: e.target.value }))} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth label="Date" type="date"
-                            value={goalForm.date} error={!!goalErrors.date} helperText={goalErrors.date}
-                            onChange={(e) => setGoalForm((p) => ({ ...p, date: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <TextField fullWidth label="Responsible Person" placeholder="Name or 'Self'"
-                            value={goalForm.responsiblePerson} error={!!goalErrors.responsiblePerson} helperText={goalErrors.responsiblePerson}
-                            onChange={(e) => setGoalForm((p) => ({ ...p, responsiblePerson: e.target.value }))} />
-                        </Grid>
-                      </Grid>
-
-                      <Box sx={{
-                        border: `1px solid ${goalErrors.goal ? '#ef4444' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e0e0e0'}`,
-                        borderRadius: '4px',
-                        background: theme.palette.mode === 'dark' ? '#1e1e2e' : '#fff',
-                        overflow: 'hidden',
-                      }}>
-                        <Box component="label" sx={{ display: 'block', cursor: 'text' }}>
-                          <Box component="textarea" placeholder="Work / Goal Description" value={goalForm.goal} rows={4}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setGoalForm((p) => ({ ...p, goal: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', resize: 'none', px: 2, pt: 1.5, pb: 2, fontSize: 14, lineHeight: 1.85, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#c0c0c0', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box sx={{ px: 2, py: 0.75, borderTop: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f0f0f0'}`, display: 'flex', alignItems: 'center', background: theme.palette.mode === 'dark' ? 'transparent' : '#fafafa' }}>
-                          {goalErrors.goal && <Typography sx={{ fontSize: 11, color: '#ef4444' }}>{goalErrors.goal}</Typography>}
-                          <Typography sx={{ fontSize: 11, color: '#c0c0c0', ml: 'auto' }}>{goalForm.goal.length} characters</Typography>
-                        </Box>
+                      {/* 100 Days Goals Excel UI Grid Header */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.text.secondary }}>
+                          Goal Setup Grid ({goalGrid.length} Rows)
+                        </Typography>
+                        <Chip
+                          icon={<CalendarMonthRoundedIcon sx={{ color: '#107c41 !important', fontSize: 15 }} />}
+                          label={`Today: ${fmtDispDate(getReportDateBounds().todayStr)}`}
+                          sx={{ background: alpha('#107c41', 0.1), color: '#107c41', fontWeight: 800, fontSize: 12.5 }}
+                        />
                       </Box>
+
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
+                        <Table size="small">
+                          <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
+                            <TableRow>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Sl. No.</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Commencement</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Completion</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, py: 1.25, fontSize: 13.5 }}>Work Details</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {goalGrid.map((row, idx) => (
+                              <TableRow key={idx} sx={{ bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') : (idx % 2 === 0 ? 'transparent' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') }}>
+                                <TableCell sx={{ fontWeight: 800, textAlign: 'center', bgcolor: row.id ? (theme.palette.mode === 'dark' ? '#1e293b' : '#e2e8f0') : (theme.palette.mode === 'dark' ? '#0f172a' : '#f1f5f9'), color: theme.palette.text.secondary, borderRight: '1px solid #cbd5e1', fontSize: 13, verticalAlign: 'middle' }}>
+                                  {String(idx + 1).padStart(2, '0')}
+                                </TableCell>
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, py: 1, px: 1 }}>
+                                      <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#107c41' }} />
+                                      <Typography variant="body2" sx={{ fontSize: 14, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.date ? fmtDispDate(row.date) : '—'}
+                                      </Typography>
+                                      {!editedDates.goals?.includes(row.id as number) && (
+                                        <Tooltip title="Edit Date of Commencement">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => {
+                                              setEditGoalDialogId(row.id as number);
+                                              setEditGoalDialogForm({ date: row.date, dateEnd: row.dateEnd || row.date, goal: row.goal, responsiblePerson: 'Self' });
+                                              setEditGoalDialogOpen(true);
+                                            }}
+                                            sx={{
+                                              color: '#107c41',
+                                              p: 0.4,
+                                              ml: 0.5,
+                                              background: alpha('#107c41', 0.08),
+                                              '&:hover': { background: alpha('#107c41', 0.2) },
+                                            }}
+                                          >
+                                            <EditRoundedIcon sx={{ fontSize: 14 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Box component="input"
+                                      type="date"
+                                      value={row.date || getReportDateBounds().todayStr}
+                                      onChange={(e: any) => {
+                                        const newDate = e.target.value;
+                                        const updated = [...goalGrid];
+                                        updated[idx].date = newDate;
+                                        let curDate = newDate;
+                                        for (let i = idx + 1; i < updated.length; i++) {
+                                          if (!updated[i].id) {
+                                            curDate = addDaysToDate(curDate, 1);
+                                            updated[i].date = curDate;
+                                            updated[i].dateEnd = curDate;
+                                          }
+                                        }
+                                        setGoalGrid(updated);
+                                      }}
+                                      sx={{
+                                        width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                        px: 1.5, py: 1.4, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary,
+                                        boxSizing: 'border-box', cursor: 'text',
+                                        '&:focus': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)' }
+                                      }}
+                                    />
+                                  )}
+                                </TableCell>
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, py: 1, px: 1 }}>
+                                      <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#107c41' }} />
+                                      <Typography variant="body2" sx={{ fontSize: 14, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.dateEnd ? fmtDispDate(row.dateEnd) : '—'}
+                                      </Typography>
+                                      {!editedDates.goals?.includes(row.id as number) && (
+                                        <Tooltip title="Edit Date of Completion">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => {
+                                              setEditGoalDialogId(row.id as number);
+                                              setEditGoalDialogForm({ date: row.date, dateEnd: row.dateEnd || row.date, goal: row.goal, responsiblePerson: 'Self' });
+                                              setEditGoalDialogOpen(true);
+                                            }}
+                                            sx={{
+                                              color: '#107c41',
+                                              p: 0.4,
+                                              ml: 0.5,
+                                              background: alpha('#107c41', 0.08),
+                                              '&:hover': { background: alpha('#107c41', 0.2) },
+                                            }}
+                                          >
+                                            <EditRoundedIcon sx={{ fontSize: 14 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Box component="input"
+                                      type="date"
+                                      value={row.dateEnd || row.date || getReportDateBounds().todayStr}
+                                      onChange={(e: any) => {
+                                        const updated = [...goalGrid];
+                                        updated[idx].dateEnd = e.target.value;
+                                        setGoalGrid(updated);
+                                      }}
+                                      sx={{
+                                        width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                        px: 1.5, py: 1.4, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary,
+                                        boxSizing: 'border-box', cursor: 'text',
+                                        '&:focus': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)' }
+                                      }}
+                                    />
+                                  )}
+                                </TableCell>
+                                <TableCell sx={{ p: 0, verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea"
+                                    rows={2}
+                                    readOnly={!!row.id}
+                                    disabled={!!row.id}
+                                    value={row.goal}
+                                    onChange={(e: any) => {
+                                      if (row.id) return;
+                                      const updated = [...goalGrid];
+                                      updated[idx].goal = e.target.value;
+                                      setGoalGrid(updated);
+                                    }}
+                                    sx={{
+                                      width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                      resize: 'vertical', minHeight: 46,
+                                      px: 1.5, py: 1, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary,
+                                      boxSizing: 'border-box', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: row.id ? 'not-allowed' : 'text',
+                                      '&:focus': { bgcolor: row.id ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)') }
+                                    }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
 
                       <Divider sx={{ my: 2.5 }} />
                       <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleAddGoal} sx={{ px: 3 }}>
-                          Submit Goal
+                        <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleAddGoalGrid} sx={{ px: 3, background: 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
+                          Submit Goals
                         </Button>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => setEditGoalDialogOpen(true)} sx={{ px: 3 }}>
-                          Edit Goals
+                        <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddGoalRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
+                          + Add 2 Rows
                         </Button>
-                        <Button variant="text" startIcon={<CancelRoundedIcon />} onClick={() => { setGoalForm(blankGoal); setGoalErrors({}); }} color="inherit" sx={{ px: 3, color: theme.palette.text.secondary }}>Cancel</Button>
                       </Box>
                     </CardContent>
-                  </Card>
-
-                  {/* Hero Banner */}
-                  <Box sx={{
-                    mb: 3, p: { xs: 2.5, sm: 3.5 }, borderRadius: '20px',
-                    background: 'linear-gradient(135deg,#6366f1 0%,#4f46e5 50%,#06b6d4 100%)',
-                    position: 'relative', overflow: 'hidden',
-                    boxShadow: '0 8px 32px rgba(99,102,241,0.35)',
-                  }}>
-                    {[{ s: 160, t: -40, r: 40 }, { s: 100, t: 20, r: 180 }].map((c, i) => (
-                      <Box key={i} sx={{ position: 'absolute', width: c.s, height: c.s, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', top: c.t, right: c.r, opacity: 0.2 }} />
-                    ))}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <Box sx={{ width: 52, height: 52, borderRadius: '14px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <EmojiEventsRoundedIcon sx={{ color: '#fbbf24', fontSize: 28 }} />
-                      </Box>
-                      <Box>
-                        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 800, fontSize: { xs: 18, sm: 22 } }}>
-                          100 Days GOALS 🎯
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                          {fmtDate(GOAL_START)} &nbsp;→&nbsp; {fmtDate(GOAL_END)}
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    {/* Progress Bar */}
-                    <Box sx={{ mb: 1.5 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
-                          Overall Progress
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#fbbf24', fontWeight: 800 }}>
-                          {completedGoals} / {goals.length} days ({progressPct}%)
-                        </Typography>
-                      </Box>
-                      <LinearProgress variant="determinate" value={progressPct} sx={{
-                        height: 10, borderRadius: '10px',
-                        background: 'rgba(255,255,255,0.2)',
-                        '& .MuiLinearProgress-bar': { borderRadius: '10px', background: 'linear-gradient(90deg,#fbbf24,#f59e0b)' },
-                      }} />
-                    </Box>
-
-                    {/* Stat Pills */}
-                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                      {[
-                        { label: 'Completed', val: completedGoals, color: '#22c55e' },
-                        { label: 'Remaining', val: goals.length - completedGoals, color: '#ef4444' },
-                        { label: 'Days Elapsed', val: Math.min(Math.floor((Date.now() - GOAL_START.getTime()) / 86400000), 100), color: '#fbbf24' },
-                      ].map((s) => (
-                        <Box key={s.label} sx={{ px: 2, py: 0.75, borderRadius: '10px', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>{s.label}</Typography>
-                          <Typography variant="subtitle1" sx={{ color: s.color, fontWeight: 800, lineHeight: 1.2 }}>{s.val}</Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-
-                  {/* 100 Days Grid */}
-                  <Card sx={{ borderRadius: '20px' }}>
-                    <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <TrackChangesRoundedIcon sx={{ color: '#6366f1', fontSize: 22 }} />
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>100 Days Task Tracker</Typography>
-                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                            Click any flag to toggle completion status
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} size="small" onClick={() => setEditGoalDialogOpen(true)} sx={{ textTransform: 'none', fontWeight: 600, mr: 1 }}>
-                          Edit Goals
-                        </Button>
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${completedGoals} Done`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 600 }} />
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#ef4444 !important', fontSize: 14 }} />} label={`${goals.length - completedGoals} Pending`} size="small" sx={{ background: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 600 }} />
-                      </Box>
-                    </Box>
-                    <Box sx={{ borderRadius: '0 0 20px 20px' }}>
-                      <DataGrid rows={goals} columns={goalColumns} autoHeight pageSizeOptions={[10, 25, 50, 100]}
-                        initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-                        disableRowSelectionOnClick sx={gridSx} />
-                    </Box>
                   </Card>
                 </Box>
               )}
@@ -1006,180 +1605,133 @@ const DailyReportPage: React.FC = () => {
               ══════════════════════════════════════════════════ */}
               {tab === 2 && (
                 <Box>
-                  {/* ── Input Form Card ── */}
                   <Card sx={{ mb: 3, borderRadius: '20px' }}>
                     <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>
-                      {/* Header */}
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
                         <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>📋 Accomplishment Report</Typography>
-                          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Fill in the details and click Submit to add to the table.</Typography>
-                        </Box>
-                      </Box>
-
-                      {/* Employee Info */}
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
-                        Employee Information
-                      </Typography>
-                      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                        {[
-                          { label: 'Name', value: user?.name },
-                          { label: 'Designation', value: user?.designation },
-                          { label: 'Institution / Unit', value: user?.institution },
-                        ].map((f) => (
-                          <Grid item xs={12} sm={4} key={f.label}>
-                            <TextField fullWidth label={f.label} value={f.value ?? ''}
-                              InputProps={{ readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> }}
-                              sx={{ '& .MuiOutlinedInput-root': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', '& fieldset': { borderStyle: 'dashed' } } }}
-                            />
-                          </Grid>
-                        ))}
-                      </Grid>
-
-                      <Divider sx={{ mb: 3 }} />
-
-                      {/* Form Fields */}
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
-                        Add Accomplishment
-                      </Typography>
-                      {/* Date row */}
-                      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Date of Commencement" type="date"
-                            value={accForm.dateStart} error={!!accErrors.dateStart} helperText={accErrors.dateStart}
-                            onChange={(e) => setAccForm((p) => ({ ...p, dateStart: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Date of Completion" type="date"
-                            value={accForm.dateEnd} error={!!accErrors.dateEnd} helperText={accErrors.dateEnd}
-                            onChange={(e) => setAccForm((p) => ({ ...p, dateEnd: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                      </Grid>
-
-                      {/* Compose panel */}
-                      <Box sx={{
-                        border: `1px solid ${accErrors.area || accErrors.work ? '#ef4444' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e0e0e0'}`,
-                        borderRadius: '4px',
-                        background: theme.palette.mode === 'dark' ? '#1e1e2e' : '#fff',
-                        overflow: 'hidden',
-                      }}>
-                        <Box component="label" sx={{ display: 'block', borderBottom: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8e8e8'}`, cursor: 'text' }}>
-                          <Box component="input" placeholder="Area" value={accForm.area}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccForm((p) => ({ ...p, area: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', px: 2, py: 1.5, fontSize: 15, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? '#7986cb' : '#4a90a4', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box component="label" sx={{ display: 'block', cursor: 'text' }}>
-                          <Box component="textarea" placeholder="Work" value={accForm.work} rows={5}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAccForm((p) => ({ ...p, work: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', resize: 'none', px: 2, pt: 1.5, pb: 2, fontSize: 14, lineHeight: 1.85, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#c0c0c0', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box sx={{ px: 2, py: 0.75, borderTop: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f0f0f0'}`, display: 'flex', alignItems: 'center', background: theme.palette.mode === 'dark' ? 'transparent' : '#fafafa' }}>
-                          {(accErrors.area || accErrors.work) && <Typography sx={{ fontSize: 11, color: '#ef4444' }}>{accErrors.area || accErrors.work}</Typography>}
-                          <Typography sx={{ fontSize: 11, color: '#c0c0c0', ml: 'auto' }}>{accForm.work.length} characters</Typography>
-                        </Box>
-                      </Box>
-
-                      <Divider sx={{ my: 2.5 }} />
-                      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleAddAccomplishment} sx={{ px: 3 }}>
-                          Submit
-                        </Button>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => setEditAccDialogOpen(true)} sx={{ px: 3 }}>
-                          Edit Data
-                        </Button>
-                        <Button variant="text" startIcon={<CancelRoundedIcon />} onClick={() => { setAccForm(blankAcc); setAccErrors({}); }} color="inherit" sx={{ px: 3, color: theme.palette.text.secondary }}>Cancel</Button>
-                      </Box>
-                    </CardContent>
-                  </Card>
-
-                  {/* ── Accomplishment Table ── */}
-                  <Card sx={{ borderRadius: '20px' }}>
-                    <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <EmojiObjectsRoundedIcon sx={{ color: '#6366f1', fontSize: 22 }} />
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>ACCOMPLISHMENT FOR THE PERIOD</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 700 }}>📅 WEEKLY ALLOCATION ACCOMPLISHMENTS REPORT</Typography>
                           <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                            {accEntries.length} {accEntries.length === 1 ? 'entry' : 'entries'} recorded
+                            {weeklyAccEntries.length} completed weekly plan {weeklyAccEntries.length === 1 ? 'entry' : 'entries'}
                           </Typography>
                         </Box>
+                        <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${weeklyAccEntries.length} Completed`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 700 }} />
                       </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${accEntries.filter(a => a.completed).length} Done`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 600 }} />
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#ef4444 !important', fontSize: 14 }} />} label={`${accEntries.filter(a => !a.completed).length} Pending`} size="small" sx={{ background: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 600 }} />
-                      </Box>
-                    </Box>
 
-                    <Box>
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
                       <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
                         <colgroup>
-                          <col style={{ width: '8%' }} />
-                          <col style={{ width: '15%' }} />
-                          <col style={{ width: '30%' }} />
-                          <col style={{ width: '18%' }} />
-                          <col style={{ width: '18%' }} />
-                          <col style={{ width: '11%' }} />
+                          <col style={{ width: '60px' }} />
+                          <col style={{ width: '45%' }} />
+                          <col style={{ width: '25%' }} />
+                          <col style={{ width: '25%' }} />
                         </colgroup>
-                        <TableHead>
-                          <TableRow sx={{ background: theme.palette.mode === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.06)' }}>
-                            {['Sl. No.', 'Area', 'Work', 'Date of Commencement', 'Date of Completion', 'Status'].map((h) => (
-                              <TableCell key={h} sx={{ fontWeight: 700, fontSize: 12, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, py: 1.75, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4, borderBottom: `2px solid ${theme.palette.primary.main}` }}>
-                                {h}
-                              </TableCell>
-                            ))}
+                        <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
+                          <TableRow>
+                            <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>
+                              Sl. No.
+                            </TableCell>
+                            <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>
+                              Planned Work Details
+                            </TableCell>
+                            <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5, textAlign: 'center' }}>
+                              Date of Commencement
+                            </TableCell>
+                            <TableCell sx={{ color: '#fff', fontWeight: 800, py: 1.25, fontSize: 13.5, textAlign: 'center' }}>
+                              Date of Completion
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {accEntries.length === 0 ? (
+                          {weeklyAccEntries.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} sx={{ textAlign: 'center', py: 5, color: theme.palette.text.secondary }}>
-                                <EmojiObjectsRoundedIcon sx={{ fontSize: 40, opacity: 0.25, display: 'block', mx: 'auto', mb: 1 }} />
-                                No accomplishments yet. Fill the form above and click Submit.
+                              <TableCell colSpan={4} sx={{ textAlign: 'center', py: 4, color: theme.palette.text.secondary }}>
+                                <CalendarTodayRoundedIcon sx={{ fontSize: 36, opacity: 0.25, display: 'block', mx: 'auto', mb: 1 }} />
+                                No weekly accomplishments yet. Submit a Weekly Plan to see it here.
                               </TableCell>
                             </TableRow>
                           ) : (
-                            accEntries.map((row, idx) => (
-                              <TableRow key={row.id} sx={{ '&:hover': { background: alpha(theme.palette.primary.main, 0.04) }, borderBottom: `1px solid ${theme.palette.divider}` }}>
-                                <TableCell sx={{ width: 80 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, color: theme.palette.primary.main, background: alpha(theme.palette.primary.main, 0.1), borderRadius: '8px', px: 1.5, py: 0.3, fontSize: 12, textAlign: 'center', display: 'inline-block' }}>
-                                    {String(idx + 1).padStart(2, '0')}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Chip label={row.area} size="small" sx={{ fontSize: 11, fontWeight: 600, background: alpha(theme.palette.secondary.main, 0.12), color: theme.palette.secondary.main }} />
-                                </TableCell>
-                                <TableCell sx={{ maxWidth: 280 }}>
-                                  <Typography variant="body2" sx={{ fontSize: 13, color: theme.palette.text.secondary }}>{row.work}</Typography>
-                                </TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                    <CalendarMonthRoundedIcon sx={{ fontSize: 14, color: theme.palette.text.secondary }} />
-                                    <Typography variant="body2" sx={{ fontSize: 13 }}>
-                                      {row.dateStart ? fmtDispDate(row.dateStart) : '—'}
-                                    </Typography>
-                                  </Box>
-                                </TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                    <CalendarMonthRoundedIcon sx={{ fontSize: 14, color: theme.palette.text.secondary }} />
-                                    <Typography variant="body2" sx={{ fontSize: 13 }}>
-                                      {row.dateEnd ? fmtDispDate(row.dateEnd) : '—'}
-                                    </Typography>
-                                  </Box>
-                                </TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  <FlagCell completed={row.completed} onToggle={() => toggleAccomplishment(row.id)} />
-                                </TableCell>
-                              </TableRow>
-                            ))
+                            weeklyAccEntries
+                              .slice(weeklyPage * weeklyRowsPerPage, weeklyPage * weeklyRowsPerPage + weeklyRowsPerPage)
+                              .map((row, idx) => {
+                                const globalIdx = weeklyPage * weeklyRowsPerPage + idx;
+                                return (
+                                  <TableRow key={row.id || globalIdx} sx={{ bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') : (globalIdx % 2 === 0 ? 'transparent' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'), '&:hover': { background: alpha('#107c41', 0.04) }, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                                    <TableCell sx={{ fontWeight: 800, textAlign: 'center', bgcolor: row.id ? (theme.palette.mode === 'dark' ? '#1e293b' : '#e2e8f0') : (theme.palette.mode === 'dark' ? '#0f172a' : '#f1f5f9'), color: theme.palette.text.secondary, borderRight: '1px solid #cbd5e1', fontSize: 13, verticalAlign: 'middle', py: 1, px: 1.5 }}>
+                                      {String(globalIdx + 1).padStart(2, '0')}
+                                    </TableCell>
+                                    <TableCell sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', py: 1, px: 1.5, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle' }}>
+                                      <Typography variant="body2" sx={{ fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</Typography>
+                                    </TableCell>
+                                    <TableCell sx={{ whiteSpace: 'nowrap', py: 1, px: 1.5, textAlign: 'center', borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
+                                        <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#107c41' }} />
+                                        <Typography variant="body2" sx={{ fontSize: 14, fontWeight: 700, color: theme.palette.text.primary }}>
+                                          {row.dateStart ? fmtDispDate(row.dateStart) : '—'}
+                                        </Typography>
+                                        {!editedDates.accomplishments?.includes(row.id || globalIdx) && (
+                                          <Tooltip title="Edit Date of Commencement">
+                                            <IconButton
+                                              size="small"
+                                              onClick={() => setEditAccDateDialog({ open: true, rowId: row.id || globalIdx, dateStart: row.dateStart || '', dateEnd: row.dateEnd || '', work: row.work })}
+                                              sx={{
+                                                color: '#107c41',
+                                                p: 0.4,
+                                                ml: 0.5,
+                                                background: alpha('#107c41', 0.08),
+                                                '&:hover': { background: alpha('#107c41', 0.2) },
+                                              }}
+                                            >
+                                              <EditRoundedIcon sx={{ fontSize: 14 }} />
+                                            </IconButton>
+                                          </Tooltip>
+                                        )}
+                                      </Box>
+                                    </TableCell>
+                                    <TableCell sx={{ whiteSpace: 'nowrap', py: 1, px: 1.5, textAlign: 'center', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
+                                        <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#107c41' }} />
+                                        <Typography variant="body2" sx={{ fontSize: 14, fontWeight: 700, color: theme.palette.text.primary }}>
+                                          {row.dateEnd ? fmtDispDate(row.dateEnd) : '—'}
+                                        </Typography>
+                                        {!editedDates.accomplishments?.includes(row.id || globalIdx) && (
+                                          <Tooltip title="Edit Date of Completion">
+                                            <IconButton
+                                              size="small"
+                                              onClick={() => setEditAccDateDialog({ open: true, rowId: row.id || globalIdx, dateStart: row.dateStart || '', dateEnd: row.dateEnd || '', work: row.work })}
+                                              sx={{
+                                                color: '#107c41',
+                                                p: 0.4,
+                                                ml: 0.5,
+                                                background: alpha('#107c41', 0.08),
+                                                '&:hover': { background: alpha('#107c41', 0.2) },
+                                              }}
+                                            >
+                                              <EditRoundedIcon sx={{ fontSize: 14 }} />
+                                            </IconButton>
+                                          </Tooltip>
+                                        )}
+                                      </Box>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
                           )}
                         </TableBody>
                       </Table>
-                    </Box>
+                    </TableContainer>
+                      <TablePagination
+                        component="div"
+                        count={weeklyAccEntries.length}
+                        page={weeklyPage}
+                        onPageChange={(_, newPage) => setWeeklyPage(newPage)}
+                        rowsPerPage={weeklyRowsPerPage}
+                        onRowsPerPageChange={(e) => {
+                          setWeeklyRowsPerPage(parseInt(e.target.value, 10));
+                          setWeeklyPage(0);
+                        }}
+                        rowsPerPageOptions={[10, 20, 50]}
+                      />
+                    </CardContent>
                   </Card>
                 </Box>
               )}
@@ -1189,13 +1741,12 @@ const DailyReportPage: React.FC = () => {
               ══════════════════════════════════════════════════ */}
               {tab === 3 && (
                 <Box>
-                  {/* Form Card */}
                   <Card sx={{ mb: 3, borderRadius: '20px' }}>
                     <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 700 }}>⚠️ Pending & Priority Work</Typography>
-                          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Fill in the details and click Submit to add to the priority table.</Typography>
+                          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Log your pending & priority tasks in the spreadsheet below.</Typography>
                         </Box>
                       </Box>
 
@@ -1220,144 +1771,201 @@ const DailyReportPage: React.FC = () => {
 
                       <Divider sx={{ mb: 3 }} />
 
-                      {/* Form Fields */}
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
-                        Add Pending / Priority Work
-                      </Typography>
-                      {/* Date + person row */}
-                      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Responsible Person" placeholder="Name of responsible person"
-                            value={pendingForm.responsiblePerson}
-                            onChange={(e) => setPendingForm((p) => ({ ...p, responsiblePerson: e.target.value }))} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Status as on (Date)" type="date"
-                            value={pendingForm.statusDate}
-                            onChange={(e) => setPendingForm((p) => ({ ...p, statusDate: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Date of Commencement" type="date"
-                            value={pendingForm.dateStart} error={!!pendingErrors.dateStart} helperText={pendingErrors.dateStart}
-                            onChange={(e) => setPendingForm((p) => ({ ...p, dateStart: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Date of Completion" type="date"
-                            value={pendingForm.dateEnd}
-                            onChange={(e) => setPendingForm((p) => ({ ...p, dateEnd: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                      </Grid>
-
-                      {/* Compose panel */}
-                      <Box sx={{
-                        border: `1px solid ${pendingErrors.areas || pendingErrors.particulars ? '#ef4444' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e0e0e0'}`,
-                        borderRadius: '4px',
-                        background: theme.palette.mode === 'dark' ? '#1e1e2e' : '#fff',
-                        overflow: 'hidden',
-                      }}>
-                        <Box component="label" sx={{ display: 'block', borderBottom: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8e8e8'}`, cursor: 'text' }}>
-                          <Box component="input" placeholder="Areas" value={pendingForm.areas}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPendingForm((p) => ({ ...p, areas: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', px: 2, py: 1.5, fontSize: 15, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? '#7986cb' : '#4a90a4', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box component="label" sx={{ display: 'block', cursor: 'text' }}>
-                          <Box component="textarea" placeholder="Particulars" value={pendingForm.particulars} rows={5}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPendingForm((p) => ({ ...p, particulars: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', resize: 'none', px: 2, pt: 1.5, pb: 2, fontSize: 14, lineHeight: 1.85, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#c0c0c0', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box sx={{ px: 2, py: 0.75, borderTop: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f0f0f0'}`, display: 'flex', alignItems: 'center', background: theme.palette.mode === 'dark' ? 'transparent' : '#fafafa' }}>
-                          {pendingForm.particulars.length > 0 && <Typography sx={{ fontSize: 11, color: '#c0c0c0', ml: 'auto' }}>{pendingForm.particulars.length} characters</Typography>}
-                        </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.text.secondary }}>
+                          Pending & Priority Details ({pendingGrid.length} Rows)
+                        </Typography>
                       </Box>
-                      <TextField fullWidth label="Remarks" placeholder="E.g., Awaiting response from unit lead"
-                        value={pendingForm.remarks} sx={{ mt: 2.5 }}
-                        onChange={(e) => setPendingForm((p) => ({ ...p, remarks: e.target.value }))} />
 
-                      <Divider sx={{ my: 2.5 }} />
-                      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleAddPending} sx={{ px: 3 }}>
-                          Submit
-                        </Button>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => setEditPendingDialogOpen(true)} sx={{ px: 3 }}>
-                          Edit Data
-                        </Button>
-                        <Button variant="text" startIcon={<CancelRoundedIcon />} onClick={() => { setPendingForm(blankPending); setPendingErrors({}); }} color="inherit" sx={{ px: 3, color: theme.palette.text.secondary }}>Cancel</Button>
-                      </Box>
-                    </CardContent>
-                  </Card>
-
-                  {/* Table */}
-                  <Card sx={{ borderRadius: '20px' }}>
-                    <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <WarningAmberRoundedIcon sx={{ color: '#f59e0b', fontSize: 22 }} />
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>PENDING & PRIORITY WORK LIST</Typography>
-                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                            {pendingEntries.length} items logged
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${pendingEntries.filter(p => p.completed).length} Done`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 600 }} />
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#ef4444 !important', fontSize: 14 }} />} label={`${pendingEntries.filter(p => !p.completed).length} Pending`} size="small" sx={{ background: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 600 }} />
-                      </Box>
-                    </Box>
-
-                    <Box>
-                      <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
-                        <TableHead>
-                          <TableRow sx={{ background: theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.15)' : 'rgba(245,158,11,0.06)' }}>
-                            {['Sl. No.', 'Areas', 'Particulars', 'Responsible Person', 'Date of Commencement', 'Date of Completion', 'Status as on (Date)', 'Remarks', 'Status'].map((h) => (
-                              <TableCell key={h} sx={{ fontWeight: 700, fontSize: 12, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, py: 1.75, whiteSpace: 'nowrap', borderBottom: `2px solid #f59e0b` }}>
-                                {h}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {pendingEntries.length === 0 ? (
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
+                        <Table size="small">
+                          <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
                             <TableRow>
-                              <TableCell colSpan={9} sx={{ textAlign: 'center', py: 5, color: theme.palette.text.secondary }}>
-                                <WarningAmberRoundedIcon sx={{ fontSize: 40, opacity: 0.25, display: 'block', mx: 'auto', mb: 1 }} />
-                                No pending work records. Fill the form above and click Submit.
-                              </TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Sl. No.</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Areas</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Particulars</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Commencement</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Completion</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Status as on</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', py: 1.25, fontSize: 13.5 }}>Remarks</TableCell>
                             </TableRow>
-                          ) : (
-                            pendingEntries.map((row, idx) => (
-                              <TableRow key={row.id} sx={{ '&:hover': { background: alpha('#f59e0b', 0.04) }, borderBottom: `1px solid ${theme.palette.divider}` }}>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#f59e0b', background: alpha('#f59e0b', 0.1), borderRadius: '8px', px: 1.5, py: 0.3, fontSize: 12, textAlign: 'center', display: 'inline-block' }}>
-                                    {String(idx + 1).padStart(2, '0')}
-                                  </Typography>
+                          </TableHead>
+                          <TableBody>
+                            {pendingGrid.map((row, idx) => (
+                              <TableRow key={idx} sx={{ bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') : (idx % 2 === 0 ? 'transparent' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') }}>
+                                <TableCell sx={{ fontWeight: 800, textAlign: 'center', bgcolor: row.id ? (theme.palette.mode === 'dark' ? '#1e293b' : '#e2e8f0') : (theme.palette.mode === 'dark' ? '#0f172a' : '#f1f5f9'), color: theme.palette.text.secondary, borderRight: '1px solid #cbd5e1', fontSize: 13, verticalAlign: 'middle' }}>
+                                  {String(idx + 1).padStart(2, '0')}
                                 </TableCell>
-                                <TableCell><Chip label={row.areas} size="small" sx={{ fontSize: 11, fontWeight: 600, background: alpha('#f59e0b', 0.15), color: '#d97706' }} /></TableCell>
-                                <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" sx={{ fontSize: 13, color: theme.palette.text.secondary }}>{row.particulars}</Typography></TableCell>
-                                <TableCell><Typography variant="body2" sx={{ fontSize: 13, fontWeight: 600 }}>{row.responsiblePerson || '—'}</Typography></TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}><Typography variant="body2" sx={{ fontSize: 13 }}>{row.dateStart ? fmtDispDate(row.dateStart) : '—'}</Typography></TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}><Typography variant="body2" sx={{ fontSize: 13 }}>{row.dateEnd ? fmtDispDate(row.dateEnd) : '—'}</Typography></TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}><Typography variant="body2" sx={{ fontSize: 13 }}>{row.statusDate ? fmtDispDate(row.statusDate) : '—'}</Typography></TableCell>
-                                <TableCell sx={{ minWidth: 150 }}><Typography variant="body2" sx={{ fontSize: 13, color: '#787878' }}>{row.remarks || '—'}</Typography></TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  <FlagCell completed={row.completed} onToggle={() => togglePending(row.id)} />
+
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea" rows={2} readOnly={!!row.id} disabled={!!row.id} value={row.areas}
+                                    onChange={(e: any) => {
+                                      const updated = [...pendingGrid];
+                                      updated[idx].areas = e.target.value;
+                                      setPendingGrid(updated);
+                                    }}
+                                    sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary, boxSizing: 'border-box' }}
+                                  />
+                                </TableCell>
+
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea" rows={2} readOnly={!!row.id} disabled={!!row.id} value={row.particulars}
+                                    onChange={(e: any) => {
+                                      const updated = [...pendingGrid];
+                                      updated[idx].particulars = e.target.value;
+                                      setPendingGrid(updated);
+                                    }}
+                                    sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary, boxSizing: 'border-box' }}
+                                  />
+                                </TableCell>
+
+
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
+                                      <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.dateStart ? fmtDispDate(row.dateStart) : '—'}
+                                      </Typography>
+                                      {!editedDates.pending?.includes(row.id as number) && (
+                                        <Tooltip title="Edit Date of Commencement">
+                                          <IconButton size="small"
+                                            onClick={() => {
+                                              setEditPendingDateDialog({
+                                                open: true,
+                                                rowId: row.id as number,
+                                                dateStart: row.dateStart,
+                                                dateEnd: row.dateEnd || '',
+                                                statusDate: row.statusDate || '',
+                                                work: row.particulars
+                                              });
+                                            }}
+                                            sx={{ color: '#107c41', p: 0.3, background: alpha('#107c41', 0.08), '&:hover': { background: alpha('#107c41', 0.2) } }}
+                                          >
+                                            <EditRoundedIcon sx={{ fontSize: 13 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Box component="input" type="date" value={row.dateStart}
+                                      onChange={(e: any) => {
+                                        const updated = [...pendingGrid];
+                                        updated[idx].dateStart = e.target.value;
+                                        setPendingGrid(updated);
+                                      }}
+                                      sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', px: 1, py: 1.4, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
+                                    />
+                                  )}
+                                </TableCell>
+
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
+                                      <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.dateEnd ? fmtDispDate(row.dateEnd) : '—'}
+                                      </Typography>
+                                      {!editedDates.pending?.includes(row.id as number) && (
+                                        <Tooltip title="Edit Date of Completion">
+                                          <IconButton size="small"
+                                            onClick={() => {
+                                              setEditPendingDateDialog({
+                                                open: true,
+                                                rowId: row.id as number,
+                                                dateStart: row.dateStart,
+                                                dateEnd: row.dateEnd || '',
+                                                statusDate: row.statusDate || '',
+                                                work: row.particulars
+                                              });
+                                            }}
+                                            sx={{ color: '#107c41', p: 0.3, background: alpha('#107c41', 0.08), '&:hover': { background: alpha('#107c41', 0.2) } }}
+                                          >
+                                            <EditRoundedIcon sx={{ fontSize: 13 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Box component="input" type="date" value={row.dateEnd}
+                                      onChange={(e: any) => {
+                                        const updated = [...pendingGrid];
+                                        updated[idx].dateEnd = e.target.value;
+                                        setPendingGrid(updated);
+                                      }}
+                                      sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', px: 1, py: 1.4, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
+                                    />
+                                  )}
+                                </TableCell>
+
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
+                                      <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.statusDate ? fmtDispDate(row.statusDate) : '—'}
+                                      </Typography>
+                                      {!editedDates.pending?.includes(row.id as number) && (
+                                        <Tooltip title="Edit Status as on">
+                                          <IconButton size="small"
+                                            onClick={() => {
+                                              setEditPendingDateDialog({
+                                                open: true,
+                                                rowId: row.id as number,
+                                                dateStart: row.dateStart,
+                                                dateEnd: row.dateEnd || '',
+                                                statusDate: row.statusDate || '',
+                                                work: row.particulars
+                                              });
+                                            }}
+                                            sx={{ color: '#107c41', p: 0.3, background: alpha('#107c41', 0.08), '&:hover': { background: alpha('#107c41', 0.2) } }}
+                                          >
+                                            <EditRoundedIcon sx={{ fontSize: 13 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Box component="input" type="date" value={row.statusDate}
+                                      onChange={(e: any) => {
+                                        const updated = [...pendingGrid];
+                                        updated[idx].statusDate = e.target.value;
+                                        setPendingGrid(updated);
+                                      }}
+                                      sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', px: 1, py: 1.4, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
+                                    />
+                                  )}
+                                </TableCell>
+
+
+                                <TableCell sx={{ p: 0, verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea" rows={2} readOnly={!!row.id} disabled={!!row.id} value={row.remarks}
+                                    onChange={(e: any) => {
+                                      const updated = [...pendingGrid];
+                                      updated[idx].remarks = e.target.value;
+                                      setPendingGrid(updated);
+                                    }}
+                                    sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary, boxSizing: 'border-box' }}
+                                  />
                                 </TableCell>
                               </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </Box>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+
+                      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Button variant="contained" startIcon={<SendRoundedIcon />} onClick={handleSubmitPendingGrid} sx={{ px: 3, background: 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
+                          Submit Pending & Priority Work
+                        </Button>
+                        <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddPendingRows} sx={{ px: 3, color: '#107c41', borderColor: '#107c41', '&:hover': { borderColor: '#0e6b37', background: 'rgba(16,124,65,0.04)' } }}>
+                          + Add 2 Rows
+                        </Button>
+                      </Box>
+                    </CardContent>
                   </Card>
                 </Box>
               )}
 
               {/* ══════════════════════════════════════════════════
-                  TAB 4 — Weekly Plan
+                  TAB 4 — Weekly Work Allocation Plan
               ══════════════════════════════════════════════════ */}
               {tab === 4 && (
                 <Box>
@@ -1390,121 +1998,127 @@ const DailyReportPage: React.FC = () => {
                         ))}
                       </Grid>
 
-                      <Divider sx={{ mb: 3 }} />
-
-                      {/* Form Fields */}
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
-                        Add Weekly Allocation
-                      </Typography>
-                      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Date" type="date"
-                            value={weeklyForm.date} error={!!weeklyErrors.date} helperText={weeklyErrors.date}
-                            onChange={(e) => setWeeklyForm((p) => ({ ...p, date: e.target.value }))}
-                            InputLabelProps={{ shrink: true }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Responsible Person" placeholder="Name or 'Self'"
-                            value={weeklyForm.responsiblePerson}
-                            onChange={(e) => setWeeklyForm((p) => ({ ...p, responsiblePerson: e.target.value }))} />
-                        </Grid>
-                      </Grid>
-
-                      {/* Compose panel */}
-                      <Box sx={{
-                        border: `1px solid ${weeklyErrors.work ? '#ef4444' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e0e0e0'}`,
-                        borderRadius: '4px',
-                        background: theme.palette.mode === 'dark' ? '#1e1e2e' : '#fff',
-                        overflow: 'hidden',
-                      }}>
-                        <Box component="label" sx={{ display: 'block', cursor: 'text' }}>
-                          <Box component="textarea" placeholder="Planned Work Details..." value={weeklyForm.work} rows={5}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setWeeklyForm((p) => ({ ...p, work: e.target.value }))}
-                            sx={{ display: 'block', width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none', background: 'transparent', resize: 'none', px: 2, pt: 1.5, pb: 2, fontSize: 14, lineHeight: 1.85, fontFamily: 'inherit', color: theme.palette.text.primary, '&::placeholder': { color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#c0c0c0', opacity: 1 } }}
-                          />
-                        </Box>
-                        <Box sx={{ px: 2, py: 0.75, borderTop: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f0f0f0'}`, display: 'flex', alignItems: 'center', background: theme.palette.mode === 'dark' ? 'transparent' : '#fafafa' }}>
-                          {weeklyForm.work.length > 0 && <Typography sx={{ fontSize: 11, color: '#c0c0c0', ml: 'auto' }}>{weeklyForm.work.length} characters</Typography>}
-                        </Box>
+                      {/* Weekly Reports Excel UI Grid Header */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.text.secondary }}>
+                          Weekly Work Allocation Plans ({weeklyGrid.length} Rows)
+                        </Typography>
                       </Box>
+
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
+                        <Table size="small">
+                          <colgroup>
+                            <col style={{ width: '60px' }} />
+                            <col style={{ width: '180px' }} />
+                            <col style={{ width: '180px' }} />
+                            <col style={{ width: 'auto' }} />
+                          </colgroup>
+                          <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
+                            <TableRow>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>SI.NO</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Starting Date</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Ending Date</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, py: 1.25, fontSize: 13.5 }}>Planned Work Details</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {weeklyGrid.map((row, idx) => (
+                              <TableRow key={idx} sx={{ bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') : (idx % 2 === 0 ? 'transparent' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'), borderBottom: `1px solid ${theme.palette.divider}` }}>
+                                {/* SI.NO */}
+                                <TableCell sx={{ fontWeight: 800, textAlign: 'center', bgcolor: row.id ? (theme.palette.mode === 'dark' ? '#1e293b' : '#e2e8f0') : (theme.palette.mode === 'dark' ? '#0f172a' : '#f1f5f9'), color: theme.palette.text.secondary, borderRight: '1px solid #cbd5e1', fontSize: 13, verticalAlign: 'middle' }}>
+                                  {String(idx + 1).padStart(2, '0')}
+                                </TableCell>
+
+                                {/* Starting Date */}
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, py: 1, px: 1 }}>
+                                      <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#107c41' }} />
+                                      <Typography variant="body2" sx={{ fontSize: 13.5, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.date ? fmtDispDate(row.date) : '—'}
+                                      </Typography>
+                                    </Box>
+                                  ) : (
+                                    <Box component="input"
+                                      type="date"
+                                      value={row.date}
+                                      onChange={(e: any) => handleWeeklyGridDateChange(idx, 'date', e.target.value)}
+                                      sx={{
+                                        width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                        px: 1.5, py: 1.4, fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary,
+                                        boxSizing: 'border-box',
+                                        '&:focus': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)' }
+                                      }}
+                                    />
+                                  )}
+                                </TableCell>
+
+                                {/* Ending Date (user-selectable, constrained within 7 days of Starting Date) */}
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, py: 1, px: 1 }}>
+                                      <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#107c41' }} />
+                                      <Typography variant="body2" sx={{ fontSize: 13.5, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.dateEnd ? fmtDispDate(row.dateEnd) : '—'}
+                                      </Typography>
+                                    </Box>
+                                  ) : (
+                                    <Box component="input"
+                                      type="date"
+                                      value={row.dateEnd}
+                                      min={row.date || undefined}
+                                      max={row.date ? addDaysToDate(row.date, 6) : undefined}
+                                      disabled={!row.date}
+                                      onChange={(e: any) => handleWeeklyGridDateChange(idx, 'dateEnd', e.target.value)}
+                                      sx={{
+                                        width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                        px: 1.5, py: 1.4, fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary,
+                                        boxSizing: 'border-box', cursor: !row.date ? 'not-allowed' : 'text',
+                                        '&:focus': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)' }
+                                      }}
+                                    />
+                                  )}
+                                </TableCell>
+
+                                {/* Planned Work Details */}
+                                <TableCell sx={{ p: 0, verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea"
+                                    rows={2}
+                                    readOnly={!!row.id}
+                                    disabled={!!row.id}
+                                    value={row.work}
+                                    onChange={(e: any) => {
+                                      if (row.id) return;
+                                      const updated = [...weeklyGrid];
+                                      updated[idx].work = e.target.value;
+                                      setWeeklyGrid(updated);
+                                    }}
+                                    sx={{
+                                      width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                                      resize: 'vertical', minHeight: 46,
+                                      px: 2, py: 1, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary,
+                                      boxSizing: 'border-box', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: row.id ? 'not-allowed' : 'text',
+                                      '&:focus': { bgcolor: row.id ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)') }
+                                    }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      {weeklyErrors.work && <Alert severity="error" sx={{ mb: 2, borderRadius: '8px' }}>{weeklyErrors.work}</Alert>}
 
                       <Divider sx={{ my: 2.5 }} />
                       <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                         <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleAddWeekly} sx={{ px: 3 }}>
-                          Submit
+                          Submit Weekly Plan
                         </Button>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => setEditWeeklyDialogOpen(true)} sx={{ px: 3 }}>
-                          Edit Data
+                        <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddWeeklyRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
+                          + Add 2 Rows
                         </Button>
-                        <Button variant="text" startIcon={<CancelRoundedIcon />} onClick={() => { setWeeklyForm(blankWeekly); setWeeklyErrors({}); }} color="inherit" sx={{ px: 3, color: theme.palette.text.secondary }}>Cancel</Button>
                       </Box>
                     </CardContent>
-                  </Card>
-
-                  {/* Table */}
-                  <Card sx={{ borderRadius: '20px' }}>
-                    <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <CalendarMonthRoundedIcon sx={{ color: '#06b6d4', fontSize: 22 }} />
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>WEEKLY WORK ALLOCATION PLAN</Typography>
-                          <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                            {weeklyEntries.length} entries scheduled
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${weeklyEntries.filter(w => w.completed).length} Done`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 600 }} />
-                        <Chip icon={<FlagRoundedIcon sx={{ color: '#ef4444 !important', fontSize: 14 }} />} label={`${weeklyEntries.filter(w => !w.completed).length} Pending`} size="small" sx={{ background: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 600 }} />
-                      </Box>
-                    </Box>
-
-                    <Box>
-                      <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
-                        <TableHead>
-                          <TableRow sx={{ background: theme.palette.mode === 'dark' ? 'rgba(6,182,212,0.15)' : 'rgba(6,182,212,0.06)' }}>
-                            {['Sl. No.', 'Date', 'Work Details', 'Responsible Person', 'Status'].map((h) => (
-                              <TableCell key={h} sx={{ fontWeight: 700, fontSize: 12, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, py: 1.75, whiteSpace: 'nowrap', borderBottom: `2px solid #06b6d4` }}>
-                                {h}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {weeklyEntries.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={5} sx={{ textAlign: 'center', py: 5, color: theme.palette.text.secondary }}>
-                                <CalendarMonthRoundedIcon sx={{ fontSize: 40, opacity: 0.25, display: 'block', mx: 'auto', mb: 1 }} />
-                                No weekly plans yet. Fill the form above and click Submit.
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            weeklyEntries.map((row, idx) => (
-                              <TableRow key={row.id} sx={{ '&:hover': { background: alpha('#06b6d4', 0.04) }, borderBottom: `1px solid ${theme.palette.divider}` }}>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#0891b2', background: alpha('#06b6d4', 0.1), borderRadius: '8px', px: 1.5, py: 0.3, fontSize: 12, textAlign: 'center', display: 'inline-block' }}>
-                                    {String(idx + 1).padStart(2, '0')}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                    <CalendarTodayRoundedIcon sx={{ fontSize: 14, color: theme.palette.text.secondary }} />
-                                    <Typography variant="body2" sx={{ fontSize: 13 }}>
-                                      {row.date ? fmtDispDate(row.date) : '—'}
-                                    </Typography>
-                                  </Box>
-                                </TableCell>
-                                <TableCell sx={{ maxWidth: 350 }}><Typography variant="body2" sx={{ fontSize: 13, color: theme.palette.text.secondary }}>{row.work}</Typography></TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip label={row.responsiblePerson} size="small" color="info" sx={{ fontSize: 11, fontWeight: 600 }} /></TableCell>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  <FlagCell completed={row.completed} onToggle={() => toggleWeekly(row.id)} />
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </Box>
                   </Card>
                 </Box>
               )}
@@ -1544,8 +2158,8 @@ const DailyReportPage: React.FC = () => {
 
           {editReportDialogId !== '' && (
             <>
-              <TextField label="Area / Work Area" fullWidth value={editReportDialogForm.area} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, area: e.target.value }))} />
-              <TextField label="Report / Activities" fullWidth multiline rows={6} value={editReportDialogForm.report} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, report: e.target.value }))} />
+              <TextField label="Area" fullWidth value={editReportDialogForm.area} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, area: e.target.value }))} />
+              <TextField label="Work" fullWidth multiline rows={6} value={editReportDialogForm.report} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, report: e.target.value }))} />
             </>
           )}
         </DialogContent>
@@ -1570,7 +2184,7 @@ const DailyReportPage: React.FC = () => {
                 setEditGoalDialogId(id);
                 const row = goals.find(r => r.id === id);
                 if (row) {
-                  setEditGoalDialogForm({ date: row.date, goal: row.goal, responsiblePerson: row.responsiblePerson || '' });
+                  setEditGoalDialogForm({ date: row.date, dateEnd: row.dateEnd || row.date, goal: row.goal, responsiblePerson: row.responsiblePerson || '' });
                 }
               }}
             >
@@ -1584,9 +2198,22 @@ const DailyReportPage: React.FC = () => {
 
           {editGoalDialogId !== '' && (
             <>
-              <TextField label="Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editGoalDialogForm.date} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, date: e.target.value }))} />
-              <TextField label="Work" fullWidth multiline rows={4} value={editGoalDialogForm.goal} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, goal: e.target.value }))} />
-              <TextField label="Responsible Person" fullWidth value={editGoalDialogForm.responsiblePerson} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, responsiblePerson: e.target.value }))} />
+              <Box sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.12)' : 'rgba(16,124,65,0.06)', p: 1.5, borderRadius: '8px', border: '1px solid rgba(16,124,65,0.2)', mb: 2 }}>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+                  GOAL WORK DETAILS
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+                  {editGoalDialogForm.goal}
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editGoalDialogForm.date} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, date: e.target.value }))} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editGoalDialogForm.dateEnd} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} />
+                </Grid>
+              </Grid>
             </>
           )}
         </DialogContent>
@@ -1659,7 +2286,7 @@ const DailyReportPage: React.FC = () => {
                 setEditPendingDialogId(id);
                 const row = pendingEntries.find(r => r.id === id);
                 if (row) {
-                  setEditPendingDialogForm({ areas: row.areas, particulars: row.particulars, responsiblePerson: row.responsiblePerson, dateStart: row.dateStart, dateEnd: row.dateEnd, statusDate: row.statusDate, remarks: row.remarks });
+                  setEditPendingDialogForm({ areas: row.areas, particulars: row.particulars, responsiblePerson: row.responsiblePerson || 'Self', dateStart: row.dateStart, dateEnd: row.dateEnd, statusDate: row.statusDate || '', remarks: row.remarks });
                 }
               }}
             >
@@ -1675,11 +2302,10 @@ const DailyReportPage: React.FC = () => {
             <>
               <TextField label="Areas" fullWidth value={editPendingDialogForm.areas} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, areas: e.target.value }))} />
               <TextField label="Particulars" fullWidth value={editPendingDialogForm.particulars} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, particulars: e.target.value }))} />
-              <TextField label="Responsible Person" fullWidth value={editPendingDialogForm.responsiblePerson} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, responsiblePerson: e.target.value }))} />
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}><TextField label="Start Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
-                <Grid item xs={12} sm={4}><TextField label="End Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
-                <Grid item xs={12} sm={4}><TextField label="Status Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.statusDate} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, statusDate: e.target.value }))} /></Grid>
+                <Grid item xs={12} sm={4}><TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
+                <Grid item xs={12} sm={4}><TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
+                <Grid item xs={12} sm={4}><TextField label="Status as on" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.statusDate} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, statusDate: e.target.value }))} /></Grid>
               </Grid>
               <TextField label="Remarks" fullWidth value={editPendingDialogForm.remarks} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, remarks: e.target.value }))} />
             </>
@@ -1706,13 +2332,13 @@ const DailyReportPage: React.FC = () => {
                 setEditWeeklyDialogId(id);
                 const row = weeklyEntries.find(r => r.id === id);
                 if (row) {
-                  setEditWeeklyDialogForm({ date: row.date, work: row.work, responsiblePerson: row.responsiblePerson });
+                  setEditWeeklyDialogForm({ date: row.date, work: row.work, responsiblePerson: '' });
                 }
               }}
             >
               {weeklyEntries.map((row, idx) => (
                 <MenuItem key={row.id} value={row.id}>
-                  Sl. {String(idx + 1).padStart(2, '0')} - {row.responsiblePerson || 'Unassigned'} ({row.work.substring(0, 30)}...)
+                  Sl. {String(idx + 1).padStart(2, '0')} - {row.work.substring(0, 40)}...
                 </MenuItem>
               ))}
             </Select>
@@ -1722,13 +2348,180 @@ const DailyReportPage: React.FC = () => {
             <>
               <TextField label="Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editWeeklyDialogForm.date} onChange={(e) => setEditWeeklyDialogForm((p) => ({ ...p, date: e.target.value }))} />
               <TextField label="Work" fullWidth value={editWeeklyDialogForm.work} onChange={(e) => setEditWeeklyDialogForm((p) => ({ ...p, work: e.target.value }))} />
-              <TextField label="Responsible Person" fullWidth value={editWeeklyDialogForm.responsiblePerson} onChange={(e) => setEditWeeklyDialogForm((p) => ({ ...p, responsiblePerson: e.target.value }))} />
             </>
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => { setEditWeeklyDialogOpen(false); setEditWeeklyDialogId(''); }} color="inherit">Cancel</Button>
           <Button variant="contained" sx={{ background: 'linear-gradient(135deg,#06b6d4,#6366f1)' }} onClick={handleSaveEditWeekly} disabled={editWeeklyDialogId === ''}>Save Changes</Button>
+        </DialogActions>
+      </Dialog>
+
+
+
+
+
+      {/* Tab 2: Edit Accomplishment Dates Dialog */}
+      <Dialog open={editAccDateDialog.open} onClose={() => setEditAccDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', work: '' })} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CalendarMonthRoundedIcon sx={{ color: '#0284c7' }} />
+          Edit Accomplishment Dates
+        </DialogTitle>
+        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 2.5 }}>
+          <Box sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(2,132,199,0.12)' : 'rgba(2,132,199,0.06)', p: 1.5, borderRadius: '8px', border: '1px solid rgba(2,132,199,0.2)' }}>
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+              PLANNED WORK DETAILS
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+              {editAccDateDialog.work}
+            </Typography>
+          </Box>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Date of Commencement"
+                type="date"
+                value={editAccDateDialog.dateStart}
+                onChange={(e) => setEditAccDateDialog((p) => ({ ...p, dateStart: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Date of Completion"
+                type="date"
+                value={editAccDateDialog.dateEnd}
+                onChange={(e) => setEditAccDateDialog((p) => ({ ...p, dateEnd: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setEditAccDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', work: '' })} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const updated = weeklyAccEntries.map((e, idx) => {
+                if ((e.id && e.id === editAccDateDialog.rowId) || idx === editAccDateDialog.rowId) {
+                  return { ...e, dateStart: editAccDateDialog.dateStart, dateEnd: editAccDateDialog.dateEnd };
+                }
+                return e;
+              });
+              setWeeklyAccEntries(updated);
+              localStorage.setItem(`weekly_acc_entries_${user?.empId}`, JSON.stringify(updated));
+
+              // Add to editedDates to enforce one-time edit limit
+              const updatedEdited = {
+                ...editedDates,
+                accomplishments: [...(editedDates.accomplishments || []), editAccDateDialog.rowId]
+              };
+              setEditedDates(updatedEdited);
+              localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+
+              setSnack({ open: true, msg: 'Accomplishment dates updated successfully!', severity: 'success' });
+              setEditAccDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', work: '' });
+            }}
+            sx={{ bgcolor: '#0284c7', '&:hover': { bgcolor: '#0369a1' } }}
+          >
+            Update Dates
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Tab 3: Edit Pending Dates Dialog */}
+      <Dialog open={editPendingDateDialog.open} onClose={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' })} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CalendarMonthRoundedIcon sx={{ color: '#107c41' }} />
+          Edit Pending Work Dates
+        </DialogTitle>
+        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 2.5 }}>
+          <Box sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.12)' : 'rgba(16,124,65,0.06)', p: 1.5, borderRadius: '8px', border: '1px solid rgba(16,124,65,0.2)' }}>
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+              PENDING WORK DETAILS
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+              {editPendingDateDialog.work}
+            </Typography>
+          </Box>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Date of Commencement"
+                type="date"
+                value={editPendingDateDialog.dateStart}
+                onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, dateStart: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Date of Completion"
+                type="date"
+                value={editPendingDateDialog.dateEnd}
+                onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, dateEnd: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Status as on"
+                type="date"
+                value={editPendingDateDialog.statusDate}
+                onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, statusDate: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' })} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSavePendingDates}
+            sx={{ bgcolor: '#107c41', '&:hover': { bgcolor: '#0e6b37' } }}
+          >
+            Update Dates
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Request Edit Access Dialog */}
+      <Dialog open={requestAccessDialogOpen} onClose={() => setRequestAccessDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>Request Edit Access from Admin</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+            Submitted records require Admin authorization to modify. Once approved by Admin, you will be granted <strong>24 hours</strong> of edit access for this entry.
+          </Typography>
+          {requestTarget && (
+            <Chip label={`${requestTarget.module.toUpperCase()}: ${requestTarget.title.substring(0, 30)}...`} size="small" color="primary" sx={{ mb: 2, fontWeight: 700 }} />
+          )}
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason for Editing (Optional)"
+            placeholder="e.g. Updating work progress details or fixing entry errors..."
+            value={requestReason}
+            onChange={(e) => setRequestReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setRequestAccessDialogOpen(false)} color="inherit">Cancel</Button>
+          <Button variant="contained" onClick={handleSendEditRequest} disabled={submittingRequest} sx={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>
+            {submittingRequest ? 'Sending Request...' : 'Send Request to Admin'}
+          </Button>
         </DialogActions>
       </Dialog>
 

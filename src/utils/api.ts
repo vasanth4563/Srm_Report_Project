@@ -9,7 +9,7 @@ export async function apiRequest<T = any>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const token = localStorage.getItem('access_token');
+  const token = sessionStorage.getItem('access_token');
   const headers = new Headers(options.headers || {});
 
   // Set auth header
@@ -18,9 +18,14 @@ export async function apiRequest<T = any>(
   }
 
   // Set json content type if body exists and not FormData
-  if (options.bodyData) {
+  if (options.bodyData !== undefined) {
     headers.set('Content-Type', 'application/json');
     options.body = JSON.stringify(options.bodyData);
+  } else if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+    options.body = JSON.stringify(options.body);
+  } else if (options.body && typeof options.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {

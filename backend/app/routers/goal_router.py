@@ -13,7 +13,7 @@ def get_goals(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     target_user_id = current_user.id
-    if current_user.role == "admin" and user_id:
+    if current_user.role in ["admin", "chairman"] and user_id:
         target_user_id = user_id
     
     return db.query(models.Goal100Days).filter(models.Goal100Days.user_id == target_user_id).order_by(models.Goal100Days.day.asc()).all()

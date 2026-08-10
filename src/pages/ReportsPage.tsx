@@ -69,7 +69,7 @@ const ReportsPage: React.FC = () => {
       ),
     },
     {
-      field: 'report', headerName: 'Report Details', flex: 2, minWidth: 200,
+      field: 'report', headerName: 'Work', flex: 2, minWidth: 200,
       renderCell: (p: GridRenderCellParams) => (
         <Typography variant="body2" title={p.value as string} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.palette.text.secondary, fontSize: 13 }}>
           {p.value as string}
@@ -79,7 +79,7 @@ const ReportsPage: React.FC = () => {
     {
       field: 'completed', headerName: 'Status', flex: 0.5, minWidth: 80, align: 'center', headerAlign: 'center',
       renderCell: (p: GridRenderCellParams) => (
-        <Chip label={p.value ? 'Done' : 'Pending'} size="small" sx={{ bgcolor: p.value ? alpha('#22c55e', 0.1) : alpha('#ef4444', 0.1), color: p.value ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 11 }} />
+        <Chip label={p.value ? 'Completed' : 'Pending'} size="small" sx={{ bgcolor: p.value ? alpha('#22c55e', 0.1) : alpha('#ef4444', 0.1), color: p.value ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 11 }} />
       ),
     },
   ];

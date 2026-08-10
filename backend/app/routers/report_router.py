@@ -12,8 +12,8 @@ def get_reports(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    # Admins can query other users' reports
-    if current_user.role == "admin":
+    # Admins and Chairman can query other users' reports
+    if current_user.role in ["admin", "chairman"]:
         if user_id:
             return db.query(models.DailyReport).filter(models.DailyReport.user_id == user_id).all()
         return db.query(models.DailyReport).all()

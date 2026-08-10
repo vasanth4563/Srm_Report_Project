@@ -88,37 +88,10 @@ const SidebarContent: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
         py: 2.5,
         minHeight: 76,
       }}>
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          transition: 'transform 0.3s ease',
-          '&:hover': { transform: 'rotate(5deg) scale(1.05)' },
-        }}>
-          <BrandLogo size={42} />
-        </Box>
-        {!collapsed && (
-          <Box sx={{ overflow: 'hidden' }}>
-            <Typography variant="subtitle2" sx={{
-              color: textColor,
-              fontWeight: 800,
-              lineHeight: 1.2,
-              fontSize: 13,
-              letterSpacing: '-0.02em',
-            }}>
-              SRM Group
-            </Typography>
-            <Typography variant="caption" sx={{
-              color: textSecondary,
-              fontWeight: 600,
-              fontSize: 10.5,
-              display: 'block',
-              letterSpacing: '0.02em',
-            }}>
-              Ramapuram & Trichy
-            </Typography>
-          </Box>
+        {collapsed ? (
+          <BrandLogo size={32} variant="icon" />
+        ) : (
+          <BrandLogo size={34} variant="full" />
         )}
       </Box>
 

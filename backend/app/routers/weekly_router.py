@@ -13,7 +13,7 @@ def get_weekly_plans(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     target_user_id = current_user.id
-    if current_user.role == "admin" and user_id:
+    if current_user.role in ["admin", "chairman"] and user_id:
         target_user_id = user_id
         
     return db.query(models.WeeklyPlan).filter(models.WeeklyPlan.user_id == target_user_id).all()
@@ -29,7 +29,7 @@ def create_weekly_plan(
         date=data.date,
         work=data.work,
         responsible_person=data.responsible_person or "Self",
-        completed=data.completed if data.completed is not None else False
+        completed=data.completed if data.completed is not None else True
     )
     db.add(new_weekly)
     db.commit()

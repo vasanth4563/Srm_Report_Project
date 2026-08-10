@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, List
 
 # Token Schemas
@@ -18,6 +18,7 @@ class UserLogin(BaseModel):
     password: str
 
 class UserRegister(BaseModel):
+    id: Optional[str] = None
     title: str = "Mr."
     name: str
     designation: str
@@ -39,6 +40,8 @@ class UserResponse(BaseModel):
     mobile: Optional[str] = None
     role: str
     avatar: str
+    email_sent: Optional[bool] = None
+    email_status_msg: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -149,6 +152,29 @@ class WeeklyPlanCreate(WeeklyPlanBase):
 class WeeklyPlanResponse(WeeklyPlanBase):
     id: int
     user_id: str
+
+    class Config:
+        from_attributes = True
+
+# Edit Request Schemas
+class EditRequestCreate(BaseModel):
+    module: str
+    item_id: int
+    item_title: Optional[str] = None
+    reason: Optional[str] = None
+
+class EditRequestResponse(BaseModel):
+    id: int
+    user_id: str
+    module: str
+    item_id: int
+    item_title: Optional[str] = None
+    reason: Optional[str] = None
+    status: str
+    requested_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    user_name: Optional[str] = None
 
     class Config:
         from_attributes = True

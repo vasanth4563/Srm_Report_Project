@@ -4,12 +4,14 @@ import {
   useTheme, alpha, Fade, Chip, Menu, MenuItem, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
   Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Paper,
-  CircularProgress, Tab, Tabs, LinearProgress, Select, FormControl, InputLabel
+  CircularProgress, Tab, Tabs, LinearProgress, Select, FormControl, InputLabel,
+  TextField, InputAdornment, Badge, Alert
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import TrendingDownRoundedIcon from '@mui/icons-material/TrendingDownRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import TodayRoundedIcon from '@mui/icons-material/TodayRounded';
 import PendingActionsRoundedIcon from '@mui/icons-material/PendingActionsRounded';
 import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
@@ -19,6 +21,9 @@ import WorkRoundedIcon from '@mui/icons-material/WorkRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import PhoneAndroidRoundedIcon from '@mui/icons-material/PhoneAndroidRounded';
 import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
+import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
+import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
+import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
@@ -30,6 +35,8 @@ import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import { Switch, Tooltip } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
@@ -126,11 +133,127 @@ const DashboardPage: React.FC = () => {
     { label: 'Missing Reports', value: missingReportsCount, change: missingReportsCount > 0 ? 'Action Required' : 'Up to Date', trendColor: missingReportsCount > 0 ? '#ef4444' : '#10b981', icon: WarningAmberRoundedIcon, gradient: 'linear-gradient(135deg, #ef4444, #dc2626)' },
   ];
 
+  // Search query for admin / chairman user list
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
   // Dialog and view details state
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<string>('daily');
   const [dialogData, setDialogData] = useState<any[]>([]);
   const [dialogLoading, setDialogLoading] = useState(false);
+
+  // Edit Access Requests State
+  const [editRequests, setEditRequests] = useState<any[]>([]);
+  const [editRequestsDialogOpen, setEditRequestsDialogOpen] = useState(false);
+
+  const fetchEditRequests = async () => {
+    try {
+      const data = await apiRequest<any[]>('/api/edit-requests');
+      if (data) setEditRequests(data);
+    } catch (err) {
+      console.error('Failed to fetch edit requests:', err);
+    }
+  };
+
+  const handleApproveEditRequest = async (id: number) => {
+    try {
+      await apiRequest(`/api/edit-requests/${id}/approve`, { method: 'POST' });
+      fetchEditRequests();
+    } catch (err) {
+      console.error('Failed to approve edit request:', err);
+    }
+  };
+
+  const handleRejectEditRequest = async (id: number) => {
+    try {
+      await apiRequest(`/api/edit-requests/${id}/reject`, { method: 'POST' });
+      fetchEditRequests();
+    } catch (err) {
+      console.error('Failed to reject edit request:', err);
+    }
+  };
+
+  // Add User State (Admin feature)
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [addUserLoading, setAddUserLoading] = useState(false);
+  const [addUserError, setAddUserError] = useState('');
+  const [addUserSuccessData, setAddUserSuccessData] = useState<any | null>(null);
+  const [copiedUserCreds, setCopiedUserCreds] = useState(false);
+
+  const initialAddUserForm = {
+    id: '',
+    title: 'Mr.',
+    name: '',
+    designation: '',
+    institution: 'SRM Institute of Science and Technology',
+    branch: 'Ramapuram',
+    email: '',
+    mobile: '',
+    role: 'user',
+    password: '',
+  };
+
+  const [addUserForm, setAddUserForm] = useState(initialAddUserForm);
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let pass = '';
+    for (let i = 0; i < 10; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return pass;
+  };
+
+  const handleOpenAddUser = () => {
+    setAddUserForm({
+      ...initialAddUserForm,
+      password: generateRandomPassword(),
+    });
+    setAddUserError('');
+    setAddUserDialogOpen(true);
+  };
+
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addUserForm.name.trim() || !addUserForm.email.trim() || !addUserForm.password.trim() || !addUserForm.designation.trim()) {
+      setAddUserError('Please fill in required fields: Name, Designation, Email, and Password');
+      return;
+    }
+
+    setAddUserLoading(true);
+    setAddUserError('');
+    try {
+      const createdUser = await apiRequest<any>('/api/admin/create-user', {
+        method: 'POST',
+        bodyData: addUserForm,
+      });
+
+      setAddUserDialogOpen(false);
+      setAddUserSuccessData({
+        ...createdUser,
+        plainPassword: addUserForm.password,
+      });
+      fetchAdminTracker();
+    } catch (err: any) {
+      setAddUserError(err.message || 'Failed to create user. Ensure Email or Employee ID is not already registered.');
+    } finally {
+      setAddUserLoading(false);
+    }
+  };
+
+  const handleCopyCredentials = () => {
+    if (!addUserSuccessData) return;
+    const credText = `🔑 SRM Portal Login Credentials
+Name: ${addUserSuccessData.title || ''} ${addUserSuccessData.name}
+Email / Username: ${addUserSuccessData.email}
+Password: ${addUserSuccessData.plainPassword}
+Role: ${addUserSuccessData.role}
+Portal: ${window.location.origin}/login`;
+
+    navigator.clipboard.writeText(credText);
+    setCopiedUserCreds(true);
+    setTimeout(() => setCopiedUserCreds(false), 2000);
+  };
 
   // Fetch admin table data on mount or user shift
   const fetchAdminTracker = async () => {
@@ -148,6 +271,7 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     fetchAdminTracker();
+    fetchEditRequests();
   }, [user]);
 
   const handleOpenUserMenu = (event: React.MouseEvent<HTMLButtonElement>, row: any) => {
@@ -253,7 +377,7 @@ const DashboardPage: React.FC = () => {
       )
     },
     {
-      field: 'doneReports', headerName: 'Done', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
+      field: 'doneReports', headerName: 'Completed', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
       renderCell: (p) => (
         <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 700, fontSize: 11 }} />
       )
@@ -301,35 +425,83 @@ const DashboardPage: React.FC = () => {
 
     if (dialogData.length === 0) {
       return (
-        <Typography sx={{ textAlign: 'center', py: 4, color: theme.palette.text.secondary }}>
-          No records found.
+        <Typography sx={{ textAlign: 'center', py: 5, color: theme.palette.text.secondary, fontWeight: 600 }}>
+          No records submitted for this module.
         </Typography>
       );
     }
 
+    const headerBg = theme.palette.mode === 'dark' ? 'rgba(16,185,129,0.12)' : '#e6f7f0';
+    const headerTextColor = theme.palette.mode === 'dark' ? '#34d399' : '#064e3b';
+
     switch (selectedReportType) {
       case 'daily':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
             <Table size="small">
-              <TableHead sx={{ bgcolor: 'rgba(99,102,241,0.08)' }}>
+              <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Sl.No</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Area</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Report Details</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
+                  {['Sl.No', 'Area', 'Report Details', 'Date', 'Status'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13, color: headerTextColor, py: 1.5 }}>{h}</TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dialogData.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ fontWeight: 600 }}>{index + 1}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip label={row.area} size="small" sx={{ fontSize: 11 }} /></TableCell>
-                    <TableCell sx={{ minWidth: 280 }}>{row.report}</TableCell>
+                  <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
+                    <TableCell sx={{ fontWeight: 700, width: 60 }}>{index + 1}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Chip label={row.area} size="small" sx={{ fontSize: 11, fontWeight: 600, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '12px' }} />
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 13, color: theme.palette.text.primary }}>{row.report}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{row.date}</TableCell>
                     <TableCell align="center">
-                      {row.completed ? <CheckCircleRoundedIcon sx={{ color: '#22c55e' }} /> : <ErrorOutlineRoundedIcon sx={{ color: '#ef4444' }} />}
+                      <Chip
+                        label={row.completed ? 'Completed' : 'Pending'}
+                        size="small"
+                        sx={{
+                          fontWeight: 700, fontSize: 11, px: 1,
+                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
+                          color: '#ffffff'
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        );
+      case 'reports':
+        return (
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
+            <Table size="small">
+              <TableHead sx={{ bgcolor: headerBg }}>
+                <TableRow>
+                  {['Sl.No', 'Area', 'Report Details', 'Date', 'Status'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dialogData.map((row, index) => (
+                  <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
+                    <TableCell sx={{ fontWeight: 800, fontSize: 13, width: 60 }}>{index + 1}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Chip label={row.area} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '12px' }} />
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.report}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date}</TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={row.completed ? 'Completed' : 'Pending'}
+                        size="small"
+                        sx={{
+                          fontWeight: 800, fontSize: 11.5, px: 1,
+                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
+                          color: '#ffffff'
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -339,28 +511,31 @@ const DashboardPage: React.FC = () => {
         );
       case 'goals':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
             <Table size="small">
-              <TableHead sx={{ bgcolor: 'rgba(251,191,36,0.08)' }}>
+              <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Sl. No.</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Work</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Responsible Person</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
+                  {['Sl.No', 'Date', 'Goal Details', 'Status'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dialogData.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ fontWeight: 800, color: '#fbbf24' }}>Sl. No. {String(row.day).padStart(3, '0')}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date}</TableCell>
-                    <TableCell>{row.goal}</TableCell>
-                    <TableCell>
-                      <Chip label={row.responsible_person || 'Self'} size="small" color="primary" variant="outlined" sx={{ fontSize: 10, fontWeight: 600 }} />
-                    </TableCell>
+                {dialogData.map((row, index) => (
+                  <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
+                    <TableCell sx={{ fontWeight: 800, fontSize: 13, color: '#0369a1' }}>Day {String(row.day || index + 1).padStart(3, '0')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date}</TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.goal}</TableCell>
                     <TableCell align="center">
-                      <Chip label={row.completed ? 'Completed' : 'Pending'} size="small" color={row.completed ? 'success' : 'error'} sx={{ fontWeight: 600, fontSize: 10 }} />
+                      <Chip
+                        label={row.completed ? 'Completed' : 'Pending'}
+                        size="small"
+                        sx={{
+                          fontWeight: 800, fontSize: 11.5, px: 1,
+                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
+                          color: '#ffffff'
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -370,28 +545,35 @@ const DashboardPage: React.FC = () => {
         );
       case 'acc':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
             <Table size="small">
-              <TableHead sx={{ bgcolor: 'rgba(16,185,129,0.08)' }}>
+              <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Sl.No</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Area</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Work Completed</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Start Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>End Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
+                  {['Sl.No', 'Area', 'Work Completed', 'Start Date', 'End Date', 'Status'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dialogData.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ fontWeight: 600 }}>{index + 1}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip label={row.area} size="small" color="secondary" variant="outlined" sx={{ fontSize: 11 }} /></TableCell>
-                    <TableCell>{row.work}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date_start}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date_end}</TableCell>
+                  <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
+                    <TableCell sx={{ fontWeight: 800, fontSize: 13, width: 60 }}>{index + 1}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Chip label={row.area} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '12px' }} />
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 260, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_end}</TableCell>
                     <TableCell align="center">
-                      <Chip label={row.completed ? 'Completed' : 'Pending'} size="small" color={row.completed ? 'success' : 'error'} sx={{ fontWeight: 600, fontSize: 10 }} />
+                      <Chip
+                        label={row.completed ? 'Completed' : 'Pending'}
+                        size="small"
+                        sx={{
+                          fontWeight: 800, fontSize: 11.5, px: 1,
+                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
+                          color: '#ffffff'
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -401,30 +583,35 @@ const DashboardPage: React.FC = () => {
         );
       case 'pending':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
             <Table size="small">
-              <TableHead sx={{ bgcolor: 'rgba(245,158,11,0.08)' }}>
+              <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Sl.No</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Areas</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Particulars</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Responsible</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Timeline</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Remarks</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
+                  {['Sl.No', 'Areas', 'Particulars', 'Timeline', 'Remarks', 'Status'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dialogData.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ fontWeight: 600 }}>{index + 1}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip label={row.areas} size="small" color="warning" sx={{ fontSize: 11 }} /></TableCell>
-                    <TableCell>{row.particulars}</TableCell>
-                    <TableCell>{row.responsible_person || '—'}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date_start} to {row.date_end || '—'}</TableCell>
-                    <TableCell>{row.remarks || '—'}</TableCell>
+                  <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
+                    <TableCell sx={{ fontWeight: 800, fontSize: 13, width: 60 }}>{index + 1}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Chip label={row.areas} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: '12px' }} />
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 220, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.particulars}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start} to {row.date_end || '—'}</TableCell>
+                    <TableCell sx={{ fontSize: 13.5, color: theme.palette.text.secondary }}>{row.remarks || '—'}</TableCell>
                     <TableCell align="center">
-                      <Chip label={row.completed ? 'Completed' : 'Pending'} size="small" color={row.completed ? 'success' : 'error'} sx={{ fontWeight: 600, fontSize: 10 }} />
+                      <Chip
+                        label={row.completed ? 'Completed' : 'Pending'}
+                        size="small"
+                        sx={{
+                          fontWeight: 700, fontSize: 11, px: 1,
+                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
+                          color: '#ffffff'
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -434,26 +621,31 @@ const DashboardPage: React.FC = () => {
         );
       case 'weekly':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
             <Table size="small">
-              <TableHead sx={{ bgcolor: 'rgba(6,182,212,0.08)' }}>
+              <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Sl.No</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Scheduled Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Planned Work</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Responsible Person</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
+                  {['Sl.No', 'Scheduled Week Range', 'Planned Work Details', 'Status'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13, color: headerTextColor, py: 1.5 }}>{h}</TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dialogData.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell sx={{ fontWeight: 600 }}>{index + 1}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date}</TableCell>
-                    <TableCell>{row.work}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip label={row.responsible_person || 'Self'} size="small" color="info" sx={{ fontSize: 11 }} /></TableCell>
+                  <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
+                    <TableCell sx={{ fontWeight: 700, width: 60 }}>{index + 1}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{row.date || `${row.date_start} → ${row.date_end}`}</TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 13 }}>{row.work}</TableCell>
                     <TableCell align="center">
-                      <Chip label={row.completed ? 'Completed' : 'Pending'} size="small" color={row.completed ? 'success' : 'error'} sx={{ fontWeight: 600, fontSize: 10 }} />
+                      <Chip
+                        label={row.completed ? 'Completed' : 'Pending'}
+                        size="small"
+                        sx={{
+                          fontWeight: 700, fontSize: 11, px: 1,
+                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
+                          color: '#ffffff'
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -547,7 +739,6 @@ const DashboardPage: React.FC = () => {
                   </Box>
                 </Box>
               </Card>
-
             </>
           )}
 
@@ -742,49 +933,133 @@ const DashboardPage: React.FC = () => {
                     ? 'linear-gradient(90deg, #FA8833, #CE4200, #512888)'
                     : 'linear-gradient(90deg, #312e81, #4338ca, #6366f1)',
                 }} />
-                <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Box sx={{
-                    width: 40, height: 40, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: user?.role === 'chairman'
-                      ? 'linear-gradient(135deg, #512888, #FA8833)'
-                      : 'linear-gradient(135deg, #312e81, #4338ca)',
-                    color: '#fff', fontSize: 20,
-                  }}>
-                    {user?.role === 'chairman' ? '👑' : <PeopleAltRoundedIcon sx={{ fontSize: 20 }} />}
+                <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, minWidth: 220 }}>
+                    <Box sx={{
+                      width: 40, height: 40, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: user?.role === 'chairman'
+                        ? 'linear-gradient(135deg, #512888, #FA8833)'
+                        : 'linear-gradient(135deg, #312e81, #4338ca)',
+                      color: '#fff', fontSize: 20, flexShrink: 0,
+                    }}>
+                      {user?.role === 'chairman' ? '👑' : <PeopleAltRoundedIcon sx={{ fontSize: 20 }} />}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: user?.role === 'chairman' ? '#512888' : '#4338ca' }}>
+                        {user?.role === 'chairman' ? 'Staff Performance & Overall Progress' : 'Employee Reports Tracker'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                        Displaying {userRows.filter(r => {
+                          if (r.role === 'chairman' || r.name.includes('Chairman')) return false;
+                          if (branchFilter !== 'All' && r.branch !== branchFilter) return false;
+                          if (userSearchQuery.trim()) {
+                            const q = userSearchQuery.toLowerCase().trim();
+                            return (r.name?.toLowerCase().includes(q) || r.designation?.toLowerCase().includes(q) || r.institution?.toLowerCase().includes(q) || r.branch?.toLowerCase().includes(q) || r.id?.toString().includes(q));
+                          }
+                          return true;
+                        }).length} staff users
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: user?.role === 'chairman' ? '#512888' : '#4338ca' }}>
-                      {user?.role === 'chairman' ? 'Staff Performance & Overall Progress' : 'Employee Reports Tracker'}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                      Displaying {branchFilter === 'All' ? 'all' : branchFilter} {userRows.filter(r => {
-                        if (r.role === 'chairman' || r.name.includes('Chairman')) return false;
-                        if (branchFilter !== 'All' && r.branch !== branchFilter) return false;
-                        return true;
-                      }).length} staff users
-                    </Typography>
+
+                  {/* Header Search & Filter Bar */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', ml: 'auto' }}>
+                    <TextField
+                      size="small"
+                      placeholder="Search user name, designation..."
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchRoundedIcon sx={{ color: user?.role === 'chairman' ? '#FA8833' : '#6366f1', fontSize: 20 }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: userSearchQuery ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => setUserSearchQuery('')}>
+                              <ClearRoundedIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
+                      sx={{
+                        width: { xs: '100%', sm: 260 },
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '12px',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                          '& fieldset': { borderColor: user?.role === 'chairman' ? alpha('#FA8833', 0.3) : alpha('#6366f1', 0.25) },
+                          '&:hover fieldset': { borderColor: user?.role === 'chairman' ? '#FA8833' : '#6366f1' },
+                        },
+                      }}
+                    />
+
+                    {user?.role === 'admin' && (
+                      <>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<PersonAddRoundedIcon />}
+                          onClick={handleOpenAddUser}
+                          sx={{
+                            borderRadius: '12px',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            px: 2,
+                            py: 0.8,
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #059669, #047857)',
+                            },
+                          }}
+                        >
+                          Add User
+                        </Button>
+                        <Badge badgeContent={editRequests.filter(r => r.status === 'pending').length} color="error">
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<PendingActionsRoundedIcon />}
+                            onClick={() => setEditRequestsDialogOpen(true)}
+                            sx={{
+                              borderRadius: '12px',
+                              textTransform: 'none',
+                              fontWeight: 700,
+                              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                              boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
+                            }}
+                          >
+                            Edit Access Requests
+                          </Button>
+                        </Badge>
+                      </>
+                    )}
+
+                    {/* Branch Filter — Chairman */}
+                    {user?.role === 'chairman' && (
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel sx={{ fontWeight: 600, fontSize: 13 }}>Branch</InputLabel>
+                        <Select
+                          value={branchFilter}
+                          label="Branch"
+                          onChange={(e) => setBranchFilter(e.target.value)}
+                          sx={{
+                            borderRadius: '12px', fontWeight: 600, fontSize: 13,
+                            '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha('#FA8833', 0.3) },
+                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#FA8833' },
+                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#CE4200' },
+                          }}
+                        >
+                          <MenuItem value="All">🏢 All Branches</MenuItem>
+                          <MenuItem value="Ramapuram">📍 Ramapuram</MenuItem>
+                          <MenuItem value="Trichy">📍 Trichy</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
                   </Box>
-                  {/* Branch Filter — Chairman */}
-                  {user?.role === 'chairman' && (
-                    <FormControl size="small" sx={{ minWidth: 180 }}>
-                      <InputLabel sx={{ fontWeight: 600, fontSize: 13 }}>Branch</InputLabel>
-                      <Select
-                        value={branchFilter}
-                        label="Branch"
-                        onChange={(e) => setBranchFilter(e.target.value)}
-                        sx={{
-                          borderRadius: '12px', fontWeight: 600, fontSize: 13,
-                          '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha('#FA8833', 0.3) },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#FA8833' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#CE4200' },
-                        }}
-                      >
-                        <MenuItem value="All">🏢 All Branches</MenuItem>
-                        <MenuItem value="Ramapuram">📍 Ramapuram</MenuItem>
-                        <MenuItem value="Trichy">📍 Trichy</MenuItem>
-                      </Select>
-                    </FormControl>
-                  )}
                 </Box>
                 <Box sx={{ borderRadius: '0 0 20px 20px' }}>
                   <Box sx={{ width: '100%' }}>
@@ -797,6 +1072,16 @@ const DashboardPage: React.FC = () => {
                         rows={userRows.filter(r => {
                           if (r.role === 'chairman' || r.name.includes('Chairman')) return false;
                           if (branchFilter !== 'All' && r.branch !== branchFilter) return false;
+                          if (userSearchQuery.trim()) {
+                            const q = userSearchQuery.toLowerCase().trim();
+                            return (
+                              r.name?.toLowerCase().includes(q) ||
+                              r.designation?.toLowerCase().includes(q) ||
+                              r.institution?.toLowerCase().includes(q) ||
+                              r.branch?.toLowerCase().includes(q) ||
+                              r.id?.toString().includes(q)
+                            );
+                          }
                           return true;
                         })}
                         columns={userColumns}
@@ -863,32 +1148,47 @@ const DashboardPage: React.FC = () => {
             maxWidth="md"
             fullWidth
           >
-            <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${theme.palette.divider}`, pb: user?.role === 'chairman' ? 2 : 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: user?.role === 'chairman' ? 0 : 1.5 }}>
-                <PeopleAltRoundedIcon color="primary" />
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  {menuUser ? `${menuUser.name} (${menuUser.designation}) ${user?.role === 'chairman' ? '— Executive Progress Overview' : ''}` : 'User Performance Summary'}
+            <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0, pt: 2.5, px: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                <PeopleAltRoundedIcon sx={{ color: '#4c248b', fontSize: 26 }} />
+                <Typography variant="h5" sx={{ fontWeight: 800, color: theme.palette.text.primary }}>
+                  {menuUser ? `${menuUser.title || ''} ${menuUser.name} (${menuUser.designation})` : 'User Performance Summary'}
                 </Typography>
               </Box>
-              {user?.role !== 'chairman' && (
-                <Tabs
-                  value={selectedReportType}
-                  onChange={(_, val) => handleSelectReport(val)}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                  sx={{ '& .MuiTab-root': { fontWeight: 700, fontSize: 13, textTransform: 'none', py: 1 } }}
-                >
-                  <Tab label="Daily Reports" value="daily" />
-                  <Tab label="100 Days Goals" value="goals" />
-                  <Tab label="Accomplishments" value="acc" />
-                  <Tab label="Pending Work" value="pending" />
-                  <Tab label="Weekly Plans" value="weekly" />
-                </Tabs>
-              )}
+              <Tabs
+                value={selectedReportType}
+                onChange={(_, val) => handleSelectReport(val)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  '& .MuiTab-root': {
+                    fontWeight: 700,
+                    fontSize: 14,
+                    textTransform: 'none',
+                    py: 1.2,
+                    px: 2,
+                    color: theme.palette.text.secondary,
+                    '&.Mui-selected': {
+                      color: '#4c248b',
+                    },
+                  },
+                  '& .MuiTabs-indicator': {
+                    backgroundColor: '#4c248b',
+                    height: 3.5,
+                    borderRadius: '3px 3px 0 0',
+                  },
+                }}
+              >
+                <Tab icon={<DescriptionRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Daily Reports" value="daily" />
+                <Tab icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="100 Days Goals" value="goals" />
+                <Tab icon={<VerifiedRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Accomplishments" value="acc" />
+                <Tab icon={<PendingActionsRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Pending Work" value="pending" />
+                <Tab icon={<TodayRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Weekly Plans" value="weekly" />
+              </Tabs>
             </DialogTitle>
             <DialogContent dividers sx={{ p: 3 }}>
               {menuUser && (
-                <Card sx={{ mb: user?.role === 'chairman' ? 0 : 3, p: 2.5, borderRadius: '16px', background: alpha(theme.palette.primary.main, 0.04), border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}` }}>
+                <Card sx={{ mb: 3, p: 2.5, borderRadius: '16px', background: alpha(theme.palette.primary.main, 0.04), border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}` }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Individual Staff Overall Progress</Typography>
@@ -897,7 +1197,7 @@ const DashboardPage: React.FC = () => {
                       </Typography>
                     </Box>
                     <Chip
-                      label={`${menuUser.progressPct || 0}% Overall Progress (${menuUser.doneReports}/${menuUser.totalReports} Done)`}
+                      label={`${menuUser.progressPct || 0}% Overall Progress (${menuUser.doneReports}/${menuUser.totalReports} Completed)`}
                       color={menuUser.progressPct >= 75 ? 'success' : 'warning'}
                       sx={{ fontWeight: 800, fontSize: 12 }}
                     />
@@ -926,10 +1226,17 @@ const DashboardPage: React.FC = () => {
                         const stats = menuUser.moduleBreakdown?.[m.key] || { done: 0, total: 0, pct: 0 };
                         return (
                           <Grid item xs={6} sm={2.4} key={m.key}>
-                            <Box sx={{ p: 1, borderRadius: '10px', bgcolor: alpha(m.color, 0.08), border: `1px solid ${alpha(m.color, 0.2)}`, textAlign: 'center' }}>
+                            <Box
+                              onClick={() => handleSelectReport(m.key)}
+                              sx={{
+                                p: 1, borderRadius: '10px', bgcolor: alpha(m.color, 0.08),
+                                border: `1px solid ${alpha(m.color, 0.2)}`, textAlign: 'center', cursor: 'pointer',
+                                '&:hover': { bgcolor: alpha(m.color, 0.15) }, transition: 'all 0.2s',
+                              }}
+                            >
                               <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', color: m.color, fontSize: 11 }}>{m.label}</Typography>
                               <Typography variant="body2" sx={{ fontWeight: 800, fontSize: 13, my: 0.25 }}>{stats.pct}%</Typography>
-                              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: 10 }}>{stats.done}/{stats.total} Done</Typography>
+                              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: 10 }}>{stats.done}/{stats.total} Completed</Typography>
                             </Box>
                           </Grid>
                         );
@@ -939,10 +1246,359 @@ const DashboardPage: React.FC = () => {
                 </Card>
               )}
 
-              {user?.role !== 'chairman' && renderDialogContent()}
+              {renderDialogContent()}
+            </DialogContent>
+          </Dialog>
+
+          {/* Admin Edit Access Requests Approval Dialog */}
+          <Dialog open={editRequestsDialogOpen} onClose={() => setEditRequestsDialogOpen(false)} maxWidth="md" fullWidth>
+            <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PendingActionsRoundedIcon sx={{ color: '#f59e0b' }} />
+                User Edit Access Requests (24h Window)
+              </Box>
+              <Chip
+                label={`${editRequests.filter(r => r.status === 'pending').length} Pending`}
+                color={editRequests.filter(r => r.status === 'pending').length > 0 ? 'warning' : 'default'}
+                size="small"
+                sx={{ fontWeight: 700 }}
+              />
+            </DialogTitle>
+            <DialogContent dividers>
+              {editRequests.length === 0 ? (
+                <Typography variant="body2" sx={{ textAlign: 'center', py: 4, color: theme.palette.text.secondary }}>
+                  No edit access requests submitted yet.
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.06) }}>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Staff User</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Module & Item</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Reason</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Requested Date</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }} align="center">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {editRequests.map((req) => (
+                        <TableRow key={req.id}>
+                          <TableCell sx={{ fontWeight: 700 }}>{req.user_name || req.user_id}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                            <Chip label={`${req.module.toUpperCase()} #${req.item_id}`} size="small" variant="outlined" color="primary" sx={{ fontWeight: 600, fontSize: 11 }} />
+                          </TableCell>
+                          <TableCell sx={{ fontSize: 12, color: theme.palette.text.secondary }}>{req.reason || 'Needs modification'}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                            {req.requested_at ? new Date(req.requested_at).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={req.status === 'approved' ? 'Approved (24h Pass)' : req.status === 'pending' ? 'Pending' : 'Rejected'}
+                              color={req.status === 'approved' ? 'success' : req.status === 'pending' ? 'warning' : 'error'}
+                              size="small"
+                              sx={{ fontWeight: 700, fontSize: 11 }}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            {req.status === 'pending' ? (
+                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="success"
+                                  onClick={() => handleApproveEditRequest(req.id)}
+                                  sx={{ fontSize: 11, fontWeight: 700, textTransform: 'none' }}
+                                >
+                                  Approve (24h)
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="error"
+                                  onClick={() => handleRejectEditRequest(req.id)}
+                                  sx={{ fontSize: 11, fontWeight: 700, textTransform: 'none' }}
+                                >
+                                  Reject
+                                </Button>
+                              </Box>
+                            ) : req.status === 'approved' ? (
+                              <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700 }}>
+                                Active 24h Pass
+                              </Typography>
+                            ) : (
+                              <Typography variant="caption" sx={{ color: theme.palette.text.disabled }}>
+                                Closed
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </DialogContent>
             <DialogActions sx={{ p: 2 }}>
-              <Button variant="contained" onClick={() => setReportDialogOpen(false)}>Close</Button>
+              <Button onClick={() => setEditRequestsDialogOpen(false)}>Close</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* ── ADD USER DIALOG (ADMIN) ── */}
+          <Dialog
+            open={addUserDialogOpen}
+            onClose={() => !addUserLoading && setAddUserDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+            PaperProps={{ sx: { borderRadius: '24px', p: 1 } }}
+          >
+            <form onSubmit={handleCreateUserSubmit}>
+              <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+                <Avatar sx={{ bgcolor: alpha('#10b981', 0.15), color: '#10b981' }}>
+                  <PersonAddRoundedIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>➕ Add New Employee / User</Typography>
+                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                    Create account and automatically email login credentials to user
+                  </Typography>
+                </Box>
+              </DialogTitle>
+
+              <DialogContent dividers sx={{ py: 2.5 }}>
+                {addUserError && (
+                  <Alert severity="error" sx={{ mb: 2.5, borderRadius: '12px' }}>
+                    {addUserError}
+                  </Alert>
+                )}
+
+                <Grid container spacing={2.5}>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Title"
+                      size="small"
+                      value={addUserForm.title}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, title: e.target.value })}
+                    >
+                      {['Mr.', 'Dr.', 'Mrs.', 'Ms.', 'Prof.'].map((t) => (
+                        <MenuItem key={t} value={t}>{t}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+
+                  <Grid item xs={12} sm={9}>
+                    <TextField
+                      fullWidth
+                      required
+                      label="Full Name"
+                      size="small"
+                      placeholder="e.g. Dr. Rajesh Kumar"
+                      value={addUserForm.name}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, name: e.target.value })}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      required
+                      label="Designation"
+                      size="small"
+                      placeholder="e.g. Associate Professor"
+                      value={addUserForm.designation}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, designation: e.target.value })}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Institution / Unit"
+                      size="small"
+                      value={addUserForm.institution}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, institution: e.target.value })}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      required
+                      label="Email Address (Username)"
+                      type="email"
+                      size="small"
+                      placeholder="user@srm.edu.in"
+                      value={addUserForm.email}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, email: e.target.value })}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><EmailRoundedIcon sx={{ fontSize: 18, color: '#0284c7' }} /></InputAdornment>,
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Mobile Number"
+                      size="small"
+                      placeholder="e.g. +91 9876543210"
+                      value={addUserForm.mobile}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, mobile: e.target.value })}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><PhoneAndroidRoundedIcon sx={{ fontSize: 18, color: theme.palette.text.secondary }} /></InputAdornment>,
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Branch"
+                      size="small"
+                      value={addUserForm.branch}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, branch: e.target.value })}
+                    >
+                      <MenuItem value="Ramapuram">Ramapuram</MenuItem>
+                      <MenuItem value="Trichy">Trichy</MenuItem>
+                    </TextField>
+                  </Grid>
+
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="User Role"
+                      size="small"
+                      value={addUserForm.role}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, role: e.target.value })}
+                    >
+                      <MenuItem value="user">Staff User</MenuItem>
+                      <MenuItem value="admin">Administrator</MenuItem>
+                    </TextField>
+                  </Grid>
+
+                  <Grid item xs={12} sm={4}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        required
+                        label="Login Password"
+                        size="small"
+                        value={addUserForm.password}
+                        onChange={(e) => setAddUserForm({ ...addUserForm, password: e.target.value })}
+                        InputProps={{
+                          startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ fontSize: 18, color: '#f59e0b' }} /></InputAdornment>,
+                        }}
+                      />
+                      <Tooltip title="Generate Strong Password">
+                        <IconButton
+                          onClick={() => setAddUserForm({ ...addUserForm, password: generateRandomPassword() })}
+                          sx={{ background: alpha('#f59e0b', 0.1), color: '#f59e0b', '&:hover': { background: alpha('#f59e0b', 0.2) } }}
+                        >
+                          <RefreshRoundedIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Grid>
+                </Grid>
+
+                <Alert severity="info" icon={<SendRoundedIcon />} sx={{ mt: 3, borderRadius: '12px' }}>
+                  System will automatically dispatch an email with the login URL, Username, and Password to <strong>{addUserForm.email || 'the user email'}</strong>.
+                </Alert>
+              </DialogContent>
+
+              <DialogActions sx={{ p: 2.5, gap: 1 }}>
+                <Button onClick={() => setAddUserDialogOpen(false)} disabled={addUserLoading} color="inherit">
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={addUserLoading}
+                  startIcon={addUserLoading ? <CircularProgress size={18} color="inherit" /> : <SendRoundedIcon />}
+                  sx={{
+                    px: 3,
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                  }}
+                >
+                  {addUserLoading ? 'Creating User & Emailing...' : 'Create & Send Credentials'}
+                </Button>
+              </DialogActions>
+            </form>
+          </Dialog>
+
+          {/* ── USER CREDENTIALS CREATED SUCCESS DIALOG ── */}
+          <Dialog
+            open={!!addUserSuccessData}
+            onClose={() => setAddUserSuccessData(null)}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{ sx: { borderRadius: '24px', p: 1 } }}
+          >
+            <DialogTitle sx={{ textAlign: 'center', pt: 3, pb: 1 }}>
+              <Avatar sx={{ width: 64, height: 64, bgcolor: alpha('#10b981', 0.15), color: '#10b981', mx: 'auto', mb: 1.5 }}>
+                <CheckCircleRoundedIcon sx={{ fontSize: 36 }} />
+              </Avatar>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>Account Created Successfully! 🎉</Typography>
+              <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5 }}>
+                Login credentials have been generated for <strong>{addUserSuccessData?.email}</strong>.
+              </Typography>
+            </DialogTitle>
+
+            <DialogContent sx={{ py: 2 }}>
+              <Card variant="outlined" sx={{ borderRadius: '16px', background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc', p: 2.5, mb: 2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+                  USER CREDENTIALS SUMMARY
+                </Typography>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Employee Name:</Typography></Grid>
+                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 700 }}>{addUserSuccessData?.title} {addUserSuccessData?.name}</Typography></Grid>
+
+                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Login Email:</Typography></Grid>
+                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 700, color: '#0284c7' }}>{addUserSuccessData?.email}</Typography></Grid>
+
+                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Password:</Typography></Grid>
+                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 800, color: '#dc2626', fontSize: 16 }}>{addUserSuccessData?.plainPassword}</Typography></Grid>
+
+                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Login Link:</Typography></Grid>
+                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 700, color: '#4c248b' }}>{window.location.origin}/login</Typography></Grid>
+                </Grid>
+              </Card>
+
+              {addUserSuccessData?.email_sent ? (
+                <Alert severity="success" sx={{ borderRadius: '12px', fontSize: 13 }}>
+                  ✅ Login credentials email has been sent to <strong>{addUserSuccessData?.email}</strong>.
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ borderRadius: '12px', fontSize: 13 }}>
+                  ⚠️ Account created, but email could not be sent ({addUserSuccessData?.email_status_msg || 'SMTP not configured in .env'}). You can copy the credentials below to share manually.
+                </Alert>
+              )}
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2.5, justifyContent: 'space-between' }}>
+              <Button
+                variant={copiedUserCreds ? 'contained' : 'outlined'}
+                color={copiedUserCreds ? 'success' : 'primary'}
+                startIcon={copiedUserCreds ? <CheckCircleRoundedIcon /> : <ContentCopyRoundedIcon />}
+                onClick={handleCopyCredentials}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 700 }}
+              >
+                {copiedUserCreds ? 'Credentials Copied!' : '📋 Copy Credentials'}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => setAddUserSuccessData(null)}
+                sx={{ borderRadius: '12px', px: 3, fontWeight: 700 }}
+              >
+                Done
+              </Button>
             </DialogActions>
           </Dialog>
 

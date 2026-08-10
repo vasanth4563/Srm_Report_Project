@@ -56,14 +56,14 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, overflow: 'hidden' }}>
           <Box sx={{ display: { xs: 'flex', md: 'none' }, flexShrink: 0 }}>
-            <BrandLogo size={36} />
+            <BrandLogo size={32} />
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, overflow: 'hidden' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, overflow: 'hidden' }}>
               <Typography variant="h6" noWrap sx={{
                 fontWeight: 800,
                 color: '#ffffff',
-                fontSize: { xs: 14, sm: 17 },
+                fontSize: { xs: 16, sm: 20 },
                 lineHeight: 1.2,
                 letterSpacing: '-0.02em',
               }}>
@@ -74,23 +74,26 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
                 size="small"
                 sx={{
                   display: { xs: 'none', sm: 'inline-flex' },
-                  height: 20,
-                  fontSize: 10.5,
+                  height: 22,
+                  fontSize: 11.5,
                   fontWeight: 700,
-                  background: 'rgba(255, 255, 255, 0.2)',
+                  background: 'rgba(255, 255, 255, 0.22)',
                   color: '#ffffff',
-                  border: '1px solid rgba(255, 255, 255, 0.35)',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
                   backdropFilter: 'blur(8px)',
                 }}
               />
             </Box>
             <Typography variant="caption" noWrap sx={{
-              color: 'rgba(255, 255, 255, 0.85)',
-              fontWeight: 600,
-              fontSize: { xs: 10.5, sm: 11.5 },
+              color: 'rgba(255, 255, 255, 0.95)',
+              fontWeight: 700,
+              fontSize: { xs: 12, sm: 13.5 },
               letterSpacing: '0.01em',
+              mt: 0.2,
             }}>
-              {pageTitle} • Dashboard Reports & Reviews
+              {pageTitle.toLowerCase().includes('dashboard')
+                ? 'Dashboard of Reports & Reviews'
+                : `${pageTitle} • Reports & Reviews`}
             </Typography>
           </Box>
         </Box>

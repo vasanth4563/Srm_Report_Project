@@ -39,10 +39,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('access_token') || sessionStorage.getItem('token');
     if (token) {
-      if (!localStorage.getItem('access_token')) {
-        localStorage.setItem('access_token', token);
+      if (!sessionStorage.getItem('access_token')) {
+        sessionStorage.setItem('access_token', token);
       }
       fetchProfile();
     } else {
@@ -58,10 +58,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       if (response && response.access_token) {
-        localStorage.setItem("token", response.access_token);
-        localStorage.setItem("access_token", response.access_token);
-        localStorage.setItem("role", response.role || "");
-        localStorage.setItem("user_id", response.user_id || "");
+        sessionStorage.setItem("token", response.access_token);
+        sessionStorage.setItem("access_token", response.access_token);
+        sessionStorage.setItem("role", response.role || "");
+        sessionStorage.setItem("user_id", response.user_id || "");
 
         console.log("Login Successful, Token:", response.access_token);
         console.log("User ID:", response.user_id);
@@ -78,10 +78,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    localStorage.removeItem('user_id');
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('role');
+    sessionStorage.removeItem('user_id');
     setIsAuthenticated(false);
     setUser(null);
   }, []);

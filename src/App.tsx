@@ -22,7 +22,17 @@ const PrivateRoute: React.FC<{ element: React.ReactElement }> = ({ element }) =>
 };
 
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('logout') === 'true') {
+      logout();
+      // Remove query parameter from URL bar to keep it clean
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [logout]);
+
   return (
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} />

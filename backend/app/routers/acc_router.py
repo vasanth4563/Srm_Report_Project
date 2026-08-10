@@ -6,6 +6,8 @@ from .. import models, schemas, auth
 
 router = APIRouter(prefix="/api/accomplishments", tags=["accomplishments"])
 
+from datetime import timedelta
+
 @router.get("", response_model=List[schemas.AccomplishmentResponse])
 def get_accomplishments(
     user_id: Optional[str] = None,
@@ -13,10 +15,36 @@ def get_accomplishments(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     target_user_id = current_user.id
-    if current_user.role == "admin" and user_id:
+    if current_user.role in ["admin", "chairman"] and user_id:
         target_user_id = user_id
         
-    return db.query(models.Accomplishment).filter(models.Accomplishment.user_id == target_user_id).all()
+    results = []
+
+    # 1. Fetch direct accomplishment records (only completed)
+    direct_accs = db.query(models.Accomplishment).filter(
+        models.Accomplishment.user_id == target_user_id,
+        models.Accomplishment.completed == True
+    ).all()
+    results.extend(direct_accs)
+
+    # 3. Fetch all submitted weekly plans
+    weekly_plans = db.query(models.WeeklyPlan).filter(
+        models.WeeklyPlan.user_id == target_user_id
+    ).all()
+
+    for wp in weekly_plans:
+        results.append(schemas.AccomplishmentResponse(
+            id=2000000 + wp.id,
+            user_id=wp.user_id,
+            area="Weekly Work Allocation Plan",
+            work=wp.work,
+            date_start=wp.date,
+            date_end=wp.date + timedelta(days=6),
+            completed=True
+        ))
+
+    results.sort(key=lambda x: x.date_start, reverse=True)
+    return results
 
 @router.post("", response_model=schemas.AccomplishmentResponse)
 def create_accomplishment(
