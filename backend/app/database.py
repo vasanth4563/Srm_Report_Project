@@ -23,7 +23,9 @@ def create_database_if_not_exists():
                 (f"ALTER TABLE {db_name}.users ADD COLUMN title VARCHAR(20) DEFAULT 'Mr.'", "title to users"),
                 (f"ALTER TABLE {db_name}.accomplishments ADD COLUMN completed TINYINT(1) DEFAULT 1", "completed to accomplishments"),
                 (f"ALTER TABLE {db_name}.pending_works ADD COLUMN completed TINYINT(1) DEFAULT 0", "completed to pending_works"),
-                (f"ALTER TABLE {db_name}.weekly_plans ADD COLUMN completed TINYINT(1) DEFAULT 0", "completed to weekly_plans")
+                (f"ALTER TABLE {db_name}.weekly_plans ADD COLUMN completed TINYINT(1) DEFAULT 0", "completed to weekly_plans"),
+                (f"ALTER TABLE {db_name}.weekly_plans ADD COLUMN date_end DATE NULL", "date_end to weekly_plans"),
+                (f"ALTER TABLE {db_name}.pending_works MODIFY COLUMN status_date VARCHAR(255) NULL", "modify status_date to VARCHAR(255) in pending_works")
             ]:
                 try:
                     conn.execute(text(table_query))

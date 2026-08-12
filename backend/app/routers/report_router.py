@@ -3,6 +3,14 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
 from .. import models, schemas, auth
+from pydantic import BaseModel
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -99,3 +107,108 @@ def delete_report(
     db.delete(report)
     db.commit()
     return None
+
+
+class EmailAlertRequest(BaseModel):
+    missed_date_formatted: str
+
+
+def send_missing_report_email(recipient_email: str, name: str, missed_date_formatted: str):
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port_raw = os.getenv("SMTP_PORT", "587").strip()
+    try:
+        smtp_port = int(smtp_port_raw)
+    except ValueError:
+        smtp_port = 587
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASS", "").strip()
+    smtp_sender = os.getenv("SMTP_SENDER", smtp_user or "noreply@srm.edu.in").strip()
+    login_url = os.getenv("LOGIN_URL", os.getenv("APP_URL", "http://localhost:5173/login")).strip()
+    login_url_with_logout = f"{login_url}&logout=true" if "?" in login_url else f"{login_url}?logout=true"
+
+    subject = f"⚠️ Action Required: Missing Daily Report for {missed_date_formatted}"
+    
+    text_content = f"""Dear {name},
+    
+Action Required: You forgot to submit your Daily Report for yesterday ({missed_date_formatted}). Please submit it on the Daily Reports page.
+
+Login Link: {login_url_with_logout}
+
+Please submit your report as soon as possible.
+"""
+
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
+        <div style="background: linear-gradient(135deg, #dc2626, #f59e0b); padding: 20px; border-radius: 8px; text-align: center; color: white;">
+            <h2 style="margin: 0; font-size: 22px;">SRM Group of Institutions</h2>
+            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Ramapuram & Trichy • Daily Report Warning</p>
+        </div>
+
+        <div style="padding: 20px 0;">
+            <p style="font-size: 16px; color: #333333;">Dear <strong>{name}</strong>,</p>
+            
+            <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; margin: 20px 0; font-size: 15px; color: #78350f; line-height: 1.6; font-weight: 600;">
+                ⚠️ Action Required: You forgot to submit your Daily Report for yesterday ({missed_date_formatted}). Please fill and submit it on the Daily Reports page.
+            </div>
+
+            <p style="font-size: 14px; color: #555555; line-height: 1.6;">
+                Logging daily activities is required to track ongoing performance and compile weekly achievements. Please click the button below to sign in and submit your missing report:
+            </p>
+
+            <div style="text-align: center; margin: 25px 0;">
+                <a href="{login_url_with_logout}" style="background: linear-gradient(135deg, #4c248b, #0284c7); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 12px rgba(76,36,139,0.25);">
+                    Go to Daily Reports Page
+                </a>
+            </div>
+        </div>
+
+        <div style="border-top: 1px solid #eeeeee; padding-top: 15px; text-align: center; color: #888888; font-size: 12px;">
+            This is an automated reminder. If you have already submitted your report, please ignore this email.
+        </div>
+    </div>
+    """
+
+    if smtp_host and smtp_user and smtp_pass:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = smtp_sender
+            msg["To"] = recipient_email
+            msg.attach(MIMEText(text_content, "plain"))
+            msg.attach(MIMEText(html_content, "html"))
+
+            if smtp_port == 465:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_sender, [recipient_email], msg.as_string())
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_sender, [recipient_email], msg.as_string())
+
+            print(f"[EMAIL SUCCESS] Missing report warning sent to {recipient_email}")
+            return True, "Email sent successfully"
+        except Exception as e:
+            err_msg = str(e)
+            print(f"[EMAIL ERROR] Failed to send missing report email to {recipient_email}: {err_msg}")
+            return False, f"Email delivery failed: {err_msg}"
+    else:
+        status_msg = "SMTP not configured in .env"
+        print(f"[EMAIL NOT CONFIGURED] Warning for {name} ({recipient_email}) on {missed_date_formatted}")
+        return False, status_msg
+
+
+@router.post("/email-alert")
+def send_report_email_alert(
+    payload: EmailAlertRequest,
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    success, message = send_missing_report_email(
+        recipient_email=current_user.email,
+        name=current_user.name,
+        missed_date_formatted=payload.missed_date_formatted
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail=message)
+    return {"status": "success", "message": message}

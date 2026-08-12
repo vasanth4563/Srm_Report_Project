@@ -31,6 +31,10 @@ def create_weekly_plan(
         responsible_person=data.responsible_person or "Self",
         completed=data.completed if data.completed is not None else True
     )
+    try:
+        new_weekly.date_end = data.date_end
+    except Exception:
+        pass
     db.add(new_weekly)
     db.commit()
     db.refresh(new_weekly)
@@ -51,6 +55,10 @@ def update_weekly_plan(
         raise HTTPException(status_code=403, detail="Not authorized to edit this record")
     
     weekly.date = data.date
+    try:
+        weekly.date_end = data.date_end
+    except Exception:
+        pass
     weekly.work = data.work
     weekly.responsible_person = data.responsible_person
     if data.completed is not None:

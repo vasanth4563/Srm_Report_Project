@@ -5,7 +5,7 @@ import {
   Tab, Tabs, LinearProgress, Table, TableHead, TableBody,
   TableRow, TableCell, TableContainer, IconButton, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel,
-  CircularProgress, TablePagination
+  CircularProgress, TablePagination, InputBase
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -68,6 +68,8 @@ type PendingRow = {
 type WeeklyPlanRow = {
   id: number;
   date: string;
+  date_end?: string;
+  dateEnd?: string;
   work: string;
   responsiblePerson: string;
   completed: boolean;
@@ -103,7 +105,7 @@ const initialForm = { date: '', area: '', report: '' };
 const blankGoal = { day: '', date: '', goal: '', responsiblePerson: '' };
 const blankAcc = { area: '', work: '', dateStart: '', dateEnd: '' };
 const blankPending = { areas: '', particulars: '', responsiblePerson: '', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' };
-const blankWeekly = { date: '', work: '', responsiblePerson: '' };
+const blankWeekly = { date: '', dateEnd: '', work: '', responsiblePerson: '' };
 
 // ─── Flag Cell ───────────────────────────────────────────────────────────────
 const FlagCell: React.FC<{ completed: boolean; onToggle?: () => void }> = ({ completed, onToggle }) => (
@@ -136,6 +138,35 @@ const addDaysToDate = (baseDateISO: string, daysToAdd: number): string => {
   return d.toISOString().split('T')[0];
 };
 
+const toYYYYMMDD = (dateStr: string): string => {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    return '';
+  }
+};
+
+const isPastEditDeadline = (reportDateStr: string): boolean => {
+  if (!reportDateStr) return false;
+  const reportDate = new Date(reportDateStr);
+  if (isNaN(reportDate.getTime())) return false;
+  
+  // Set to next day at 18:00:00 (6:00 PM) local time
+  const deadlineDate = new Date(reportDate);
+  deadlineDate.setDate(deadlineDate.getDate() + 1);
+  deadlineDate.setHours(18, 0, 0, 0); // 6:00 PM next day
+  
+  const now = new Date();
+  return now > deadlineDate;
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const DailyReportPage: React.FC = () => {
   const theme = useTheme();
@@ -151,6 +182,42 @@ const DailyReportPage: React.FC = () => {
     { date: '', area: '', work: '' }
   ]);
   const [rows, setRows] = useState<ReportRow[]>([]);
+
+  // Helper to format ISO date to readable string (e.g. 11 Aug 2026)
+  const formatFmtDate = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+    } catch (e) {}
+    return dateStr;
+  };
+
+  const getPreviousWorkingDayStr = (todayDate: Date): string => {
+    const day = todayDate.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+    const prev = new Date(todayDate);
+    if (day === 1) {
+      // Monday -> previous working day is Friday (subtract 3 days)
+      prev.setDate(todayDate.getDate() - 3);
+    } else if (day === 0) {
+      // Sunday -> previous working day is Friday (subtract 2 days)
+      prev.setDate(todayDate.getDate() - 2);
+    } else {
+      // Other days -> previous is yesterday (subtract 1 day)
+      prev.setDate(todayDate.getDate() - 1);
+    }
+    return prev.toISOString().split('T')[0];
+  };
+
+  const todayDateObj = new Date();
+  const prevWorkingDay = getPreviousWorkingDayStr(todayDateObj);
+  const prevWorkingDayFormatted = formatFmtDate(prevWorkingDay);
+  
+  // Check if yesterday's working day report is missing (excluding Sundays and Saturdays for today's check)
+  const isSundayOrSaturday = todayDateObj.getDay() === 0 || todayDateObj.getDay() === 6;
+  const isPrevReportMissing = user?.role === 'user' && !isSundayOrSaturday && rows.length > 0 && !rows.some((r) => r.date === prevWorkingDay);
 
   const syncGridWithReports = (allReports: ReportRow[], targetDate: string) => {
     const matching = allReports.filter((r) => r.date === targetDate);
@@ -283,6 +350,7 @@ const DailyReportPage: React.FC = () => {
   const [editReportDialogOpen, setEditReportDialogOpen] = useState(false);
   const [editReportDialogId, setEditReportDialogId] = useState<number | ''>('');
   const [editReportDialogForm, setEditReportDialogForm] = useState(initialForm);
+  const [directEditAllowed, setDirectEditAllowed] = useState(true);
 
   // Tab 1 Edit Dialog State
   const [editGoalDialogOpen, setEditGoalDialogOpen] = useState(false);
@@ -404,8 +472,19 @@ const DailyReportPage: React.FC = () => {
   const handleWeeklyGridDateChange = (idx: number, field: 'date' | 'dateEnd', newDate: string) => {
     setWeeklyGrid((prev) => {
       const updated = [...prev];
-      if (field === 'date') {
-        // When Starting Date changes, auto-set Ending Date to +6 days
+      const firstUnsavedIdx = updated.findIndex(r => !r.id);
+
+      if (idx === firstUnsavedIdx && field === 'date') {
+        // When first unsaved row's Starting Date changes, propagate it to all unsaved rows
+        const start = newDate;
+        const end = addDaysToDate(start, 6);
+        for (let i = 0; i < updated.length; i++) {
+          if (!updated[i].id) { // Only update unsaved rows
+            updated[i] = { ...updated[i], date: start, dateEnd: end };
+          }
+        }
+      } else if (field === 'date') {
+        // When Starting Date changes for other rows, set its Ending Date to +6 days
         const start = newDate;
         const end = addDaysToDate(start, 6);
         updated[idx] = { ...updated[idx], date: start, dateEnd: end };
@@ -418,33 +497,22 @@ const DailyReportPage: React.FC = () => {
   };
 
   const syncGridWithWeekly = (allWeekly: WeeklyPlanRow[]) => {
-    const todayStr = getReportDateBounds().todayStr;
-
-    // Filter: only keep entries whose 7-day period hasn't ended yet
-    const activeEntries = allWeekly.filter((m) => {
-      const endDate = addDaysToDate(m.date, 6);
-      return endDate >= todayStr; // keep if ending date is today or in the future
+    // Sort all weekly plans chronologically by start date
+    const sorted = [...allWeekly].sort((a, b) => {
+      const ad = toYYYYMMDD(a.date);
+      const bd = toYYYYMMDD(b.date);
+      return ad.localeCompare(bd);
     });
 
-    if (activeEntries.length === 0) {
-      // All entries expired or no entries — show empty table for new week
-      const grid: WeeklyGridRow[] = [];
-      for (let i = 0; i < 4; i++) {
-        grid.push({ date: '', dateEnd: '', work: '' });
-      }
-      setWeeklyGrid(grid);
-      return;
-    }
-
-    const grid: WeeklyGridRow[] = activeEntries.map((m) => ({
+    const grid: WeeklyGridRow[] = sorted.map((m) => ({
       id: m.id,
       date: m.date,
-      dateEnd: addDaysToDate(m.date, 6),
+      dateEnd: m.dateEnd || m.date_end || addDaysToDate(m.date, 6),
       work: m.work,
     }));
 
-    // Pad with empty rows if less than 4
-    while (grid.length < 4) {
+    // Pad with 4 empty rows at the bottom for new entries
+    for (let i = 0; i < 4; i++) {
       grid.push({ date: '', dateEnd: '', work: '' });
     }
 
@@ -468,6 +536,34 @@ const DailyReportPage: React.FC = () => {
         { date: week1Start, dateEnd: week1End, work: '' },
         { date: week2Start, dateEnd: week2End, work: '' }
       ];
+    });
+  };
+
+  const handlePrepareNextWeek = () => {
+    const todayStr = getReportDateBounds().todayStr;
+    let latestEndDate = todayStr;
+
+    if (weeklyEntries.length > 0) {
+      for (const w of weeklyEntries) {
+        const endDate = w.dateEnd || w.date_end || addDaysToDate(w.date, 6);
+        if (endDate > latestEndDate) {
+          latestEndDate = endDate;
+        }
+      }
+    }
+
+    const nextStart = addDaysToDate(latestEndDate, 1);
+    const nextEnd = addDaysToDate(nextStart, 6);
+
+    const grid: WeeklyGridRow[] = [];
+    for (let i = 0; i < 4; i++) {
+      grid.push({ date: nextStart, dateEnd: nextEnd, work: '' });
+    }
+    setWeeklyGrid(grid);
+    setSnack({
+      open: true,
+      msg: `Ready for next week's plans! (Range: ${new Date(nextStart).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} to ${new Date(nextEnd).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
+      severity: 'info'
     });
   };
 
@@ -552,7 +648,7 @@ const DailyReportPage: React.FC = () => {
         .map((w) => ({
           id: w.id,
           dateStart: w.date,
-          dateEnd: addDaysToDate(w.date, 6),
+          dateEnd: w.date_end || addDaysToDate(w.date, 6),
           work: w.work,
           completed: true
         }));
@@ -617,6 +713,8 @@ const DailyReportPage: React.FC = () => {
       const mapped = data.map((w) => ({
         id: w.id,
         date: w.date,
+        date_end: w.date_end,
+        dateEnd: w.date_end,
         work: w.work,
         responsiblePerson: w.responsible_person || 'Self',
         completed: w.completed ?? true,
@@ -648,6 +746,29 @@ const DailyReportPage: React.FC = () => {
     if (tab === 3) fetchPending();
     if (tab === 4) fetchWeekly();
   }, [tab, user]);
+
+  // Silently trigger email notification if yesterday's report is missing
+  useEffect(() => {
+    if (isPrevReportMissing && prevWorkingDay) {
+      const storageKey = `missing_email_sent_${prevWorkingDay}_${user?.id}`;
+      const lastEmailed = localStorage.getItem(storageKey);
+      if (lastEmailed !== 'true') {
+        const sendEmailReminder = async () => {
+          try {
+            await apiRequest('/api/reports/email-alert', {
+              method: 'POST',
+              body: { missed_date_formatted: prevWorkingDayFormatted }
+            });
+            localStorage.setItem(storageKey, 'true');
+            console.log('Successfully sent missing daily report email warning.');
+          } catch (e) {
+            console.error('Failed to send missing daily report email warning:', e);
+          }
+        };
+        sendEmailReminder();
+      }
+    }
+  }, [isPrevReportMissing, prevWorkingDay, prevWorkingDayFormatted, user]);
 
   // ── Tab 1 Goals Logic ──
   const validateGoal = () => {
@@ -931,37 +1052,33 @@ const DailyReportPage: React.FC = () => {
 
   const handleAddWeekly = async () => {
     const todayStr = getReportDateBounds().todayStr;
-    const filledRows = weeklyGrid.filter(r => r.work.trim());
+    const newFilledRows = weeklyGrid.filter(r => !r.id && r.work.trim());
 
-    if (filledRows.length === 0) {
-      setWeeklyErrors({ work: 'Please enter at least one Work detail in the Excel grid below.' });
+    if (newFilledRows.length === 0) {
+      setWeeklyErrors({ work: 'Please enter at least one new Work detail in the empty rows below.' });
       return;
     }
 
     try {
-      for (const row of filledRows) {
-        const rowDate = row.date || todayStr;
-        if (row.id) {
-          await apiRequest(`/api/weekly/${row.id}`, {
-            method: 'PUT',
-            bodyData: {
-              date: rowDate,
-              work: row.work.trim(),
-              responsible_person: 'Self'
-            }
-          });
-        } else {
-          await apiRequest('/api/weekly', {
-            method: 'POST',
-            bodyData: {
-              date: rowDate,
-              work: row.work.trim(),
-              responsible_person: 'Self'
-            }
-          });
-        }
+      // Find the first new row's date or fall back to today
+      const firstRowDate = newFilledRows[0]?.date || todayStr;
+      const firstRowEndDate = newFilledRows[0]?.dateEnd || addDaysToDate(firstRowDate, 6);
+
+      for (const row of newFilledRows) {
+        const rowDate = row.date || firstRowDate;
+        const rowEndDate = row.dateEnd || firstRowEndDate;
+
+        await apiRequest('/api/weekly', {
+          method: 'POST',
+          bodyData: {
+            date: rowDate,
+            date_end: rowEndDate || null,
+            work: row.work.trim(),
+            responsible_person: 'Self'
+          }
+        });
       }
-      setSnack({ open: true, msg: `${filledRows.length} Weekly Plan entry row(s) saved successfully!`, severity: 'success' });
+      setSnack({ open: true, msg: `${newFilledRows.length} Weekly Plan entry row(s) saved successfully!`, severity: 'success' });
       setWeeklyErrors({});
       fetchWeekly();
       fetchAccomplishments();
@@ -977,6 +1094,7 @@ const DailyReportPage: React.FC = () => {
           method: 'PUT',
           bodyData: {
             date: editWeeklyDialogForm.date,
+            date_end: editWeeklyDialogForm.dateEnd || null,
             work: editWeeklyDialogForm.work,
             responsible_person: editWeeklyDialogForm.responsiblePerson || 'Self'
           }
@@ -993,7 +1111,13 @@ const DailyReportPage: React.FC = () => {
 
   const fmtDispDate = (iso: string) => {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return iso;
+    }
   };
 
   // ── Tab 0 Daily Report logic ──
@@ -1282,7 +1406,7 @@ const DailyReportPage: React.FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.text.secondary }}>
                           Area & Work Details ({reportGrid.length} Rows)
-                        </Typography>i q
+                        </Typography>
                       </Box>
 
                       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
@@ -1380,7 +1504,7 @@ const DailyReportPage: React.FC = () => {
                         <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
                           + Add 2 Rows
                         </Button>
-                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => handleCheckAndOpenEdit('reports', rows[0]?.id || 1, rows[0]?.area || 'Daily Report', () => setEditReportDialogOpen(true))} sx={{ px: 3 }}>
+                        <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => { setEditReportDialogOpen(true); setEditReportDialogId(''); setEditReportDialogForm(initialForm); setDirectEditAllowed(true); }} sx={{ px: 3 }}>
                           Edit Data
                         </Button>
                       </Box>
@@ -1785,9 +1909,9 @@ const DailyReportPage: React.FC = () => {
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Areas</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Particulars</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Commencement</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Completion</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Status as on</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', py: 1.25, fontSize: 13.5 }}>Remarks</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Remarks</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', py: 1.25, fontSize: 13.5 }}>Date of Completion</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -1819,7 +1943,7 @@ const DailyReportPage: React.FC = () => {
                                   />
                                 </TableCell>
 
-
+                                {/* 1. Date of Commencement */}
                                 <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
                                   {row.id ? (
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
@@ -1858,7 +1982,59 @@ const DailyReportPage: React.FC = () => {
                                   )}
                                 </TableCell>
 
-                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                {/* 2. Status as on */}
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  {row.id ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
+                                      <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
+                                        {row.statusDate || '—'}
+                                      </Typography>
+                                      {!editedDates.pending?.includes(row.id as number) && (
+                                        <Tooltip title="Edit Status as on">
+                                          <IconButton size="small"
+                                            onClick={() => {
+                                              setEditPendingDateDialog({
+                                                open: true,
+                                                rowId: row.id as number,
+                                                dateStart: row.dateStart,
+                                                dateEnd: row.dateEnd || '',
+                                                statusDate: row.statusDate || '',
+                                                work: row.particulars
+                                              });
+                                            }}
+                                            sx={{ color: '#107c41', p: 0.3, background: alpha('#107c41', 0.08), '&:hover': { background: alpha('#107c41', 0.2) } }}
+                                          >
+                                            <EditRoundedIcon sx={{ fontSize: 13 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    <Box component="textarea" rows={2} value={row.statusDate}
+                                      onChange={(e: any) => {
+                                        const updated = [...pendingGrid];
+                                        updated[idx].statusDate = e.target.value;
+                                        setPendingGrid(updated);
+                                      }}
+                                      sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
+                                    />
+                                  )}
+                                </TableCell>
+
+                                {/* 3. Remarks */}
+                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                  <Box component="textarea" rows={2} readOnly={!!row.id} disabled={!!row.id} value={row.remarks}
+                                    onChange={(e: any) => {
+                                      const updated = [...pendingGrid];
+                                      updated[idx].remarks = e.target.value;
+                                      setPendingGrid(updated);
+                                    }}
+                                    sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary, boxSizing: 'border-box' }}
+                                  />
+                                </TableCell>
+
+                                {/* 4. Date of Completion */}
+                                <TableCell sx={{ p: 0, verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
                                   {row.id ? (
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
                                       <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
@@ -1894,56 +2070,6 @@ const DailyReportPage: React.FC = () => {
                                       sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', px: 1, py: 1.4, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
                                     />
                                   )}
-                                </TableCell>
-
-                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
-                                  {row.id ? (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
-                                      <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
-                                        {row.statusDate ? fmtDispDate(row.statusDate) : '—'}
-                                      </Typography>
-                                      {!editedDates.pending?.includes(row.id as number) && (
-                                        <Tooltip title="Edit Status as on">
-                                          <IconButton size="small"
-                                            onClick={() => {
-                                              setEditPendingDateDialog({
-                                                open: true,
-                                                rowId: row.id as number,
-                                                dateStart: row.dateStart,
-                                                dateEnd: row.dateEnd || '',
-                                                statusDate: row.statusDate || '',
-                                                work: row.particulars
-                                              });
-                                            }}
-                                            sx={{ color: '#107c41', p: 0.3, background: alpha('#107c41', 0.08), '&:hover': { background: alpha('#107c41', 0.2) } }}
-                                          >
-                                            <EditRoundedIcon sx={{ fontSize: 13 }} />
-                                          </IconButton>
-                                        </Tooltip>
-                                      )}
-                                    </Box>
-                                  ) : (
-                                    <Box component="input" type="date" value={row.statusDate}
-                                      onChange={(e: any) => {
-                                        const updated = [...pendingGrid];
-                                        updated[idx].statusDate = e.target.value;
-                                        setPendingGrid(updated);
-                                      }}
-                                      sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', px: 1, py: 1.4, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
-                                    />
-                                  )}
-                                </TableCell>
-
-
-                                <TableCell sx={{ p: 0, verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
-                                  <Box component="textarea" rows={2} readOnly={!!row.id} disabled={!!row.id} value={row.remarks}
-                                    onChange={(e: any) => {
-                                      const updated = [...pendingGrid];
-                                      updated[idx].remarks = e.target.value;
-                                      setPendingGrid(updated);
-                                    }}
-                                    sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary, boxSizing: 'border-box' }}
-                                  />
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -2082,25 +2208,40 @@ const DailyReportPage: React.FC = () => {
 
                                 {/* Planned Work Details */}
                                 <TableCell sx={{ p: 0, verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
-                                  <Box component="textarea"
-                                    rows={2}
-                                    readOnly={!!row.id}
-                                    disabled={!!row.id}
-                                    value={row.work}
-                                    onChange={(e: any) => {
-                                      if (row.id) return;
-                                      const updated = [...weeklyGrid];
-                                      updated[idx].work = e.target.value;
-                                      setWeeklyGrid(updated);
-                                    }}
-                                    sx={{
-                                      width: '100%', border: 'none', outline: 'none', background: 'transparent',
-                                      resize: 'vertical', minHeight: 46,
-                                      px: 2, py: 1, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary,
-                                      boxSizing: 'border-box', whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: row.id ? 'not-allowed' : 'text',
-                                      '&:focus': { bgcolor: row.id ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)') }
-                                    }}
-                                  />
+                                  {row.id ? (
+                                    <Typography sx={{
+                                      px: 2, py: 1.5, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit',
+                                      color: theme.palette.text.primary, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                      lineHeight: 1.7, minHeight: 46
+                                    }}>
+                                      {row.work}
+                                    </Typography>
+                                  ) : (
+                                    <InputBase
+                                      multiline
+                                      fullWidth
+                                      value={row.work || ''}
+                                      placeholder="Enter work details..."
+                                      onChange={(e) => {
+                                        const updated = [...weeklyGrid];
+                                        updated[idx].work = e.target.value;
+                                        setWeeklyGrid(updated);
+                                      }}
+                                      sx={{
+                                        width: '100%',
+                                        minHeight: 46,
+                                        px: 2, py: 1.5, fontSize: 14.5, fontWeight: 600, fontFamily: 'inherit',
+                                        color: theme.palette.text.primary,
+                                        lineHeight: 1.7,
+                                        '& .MuiInputBase-input': {
+                                          lineHeight: 1.7,
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-word'
+                                        },
+                                        '&:focus-within': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(16,124,65,0.18)' : 'rgba(16,124,65,0.08)' }
+                                      }}
+                                    />
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -2144,7 +2285,16 @@ const DailyReportPage: React.FC = () => {
                 setEditReportDialogId(id);
                 const row = rows.find(r => r.id === id);
                 if (row) {
-                  setEditReportDialogForm({ date: row.date, area: row.area, report: row.report });
+                  if (user?.role === 'admin' || user?.role === 'chairman' || !isPastEditDeadline(row.date)) {
+                    setEditReportDialogForm({ date: row.date, area: row.area, report: row.report });
+                    setDirectEditAllowed(true);
+                  } else {
+                    setDirectEditAllowed(false);
+                    handleCheckAndOpenEdit('reports', row.id, `${row.area} (${row.date})`, () => {
+                      setEditReportDialogForm({ date: row.date, area: row.area, report: row.report });
+                      setDirectEditAllowed(true);
+                    });
+                  }
                 }
               }}
             >
@@ -2156,16 +2306,22 @@ const DailyReportPage: React.FC = () => {
             </Select>
           </FormControl>
 
+          {editReportDialogId !== '' && !directEditAllowed && (
+            <Alert severity="warning" sx={{ mb: 1, borderRadius: '8px' }}>
+              ⏰ Edit window has closed (next day 6:00 PM passed). Request Admin approval to edit this report.
+            </Alert>
+          )}
+
           {editReportDialogId !== '' && (
             <>
-              <TextField label="Area" fullWidth value={editReportDialogForm.area} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, area: e.target.value }))} />
-              <TextField label="Work" fullWidth multiline rows={6} value={editReportDialogForm.report} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, report: e.target.value }))} />
+              <TextField label="Area" fullWidth disabled={!directEditAllowed} value={editReportDialogForm.area} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, area: e.target.value }))} />
+              <TextField label="Work" fullWidth multiline rows={6} disabled={!directEditAllowed} value={editReportDialogForm.report} onChange={(e) => setEditReportDialogForm((p) => ({ ...p, report: e.target.value }))} />
             </>
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => { setEditReportDialogOpen(false); setEditReportDialogId(''); }} color="inherit">Cancel</Button>
-          <Button variant="contained" onClick={handleSaveEditReport} disabled={editReportDialogId === ''}>Save Changes</Button>
+          <Button variant="contained" onClick={handleSaveEditReport} disabled={editReportDialogId === '' || !directEditAllowed}>Save Changes</Button>
         </DialogActions>
       </Dialog>
 
@@ -2303,10 +2459,10 @@ const DailyReportPage: React.FC = () => {
               <TextField label="Areas" fullWidth value={editPendingDialogForm.areas} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, areas: e.target.value }))} />
               <TextField label="Particulars" fullWidth value={editPendingDialogForm.particulars} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, particulars: e.target.value }))} />
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}><TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
-                <Grid item xs={12} sm={4}><TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
-                <Grid item xs={12} sm={4}><TextField label="Status as on" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.statusDate} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, statusDate: e.target.value }))} /></Grid>
+                <Grid item xs={12} sm={6}><TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
+                <Grid item xs={12} sm={6}><TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
               </Grid>
+              <TextField label="Status as on" fullWidth value={editPendingDialogForm.statusDate} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, statusDate: e.target.value }))} />
               <TextField label="Remarks" fullWidth value={editPendingDialogForm.remarks} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, remarks: e.target.value }))} />
             </>
           )}
@@ -2332,7 +2488,7 @@ const DailyReportPage: React.FC = () => {
                 setEditWeeklyDialogId(id);
                 const row = weeklyEntries.find(r => r.id === id);
                 if (row) {
-                  setEditWeeklyDialogForm({ date: row.date, work: row.work, responsiblePerson: '' });
+                  setEditWeeklyDialogForm({ date: row.date, dateEnd: row.date_end || row.dateEnd || '', work: row.work, responsiblePerson: '' });
                 }
               }}
             >
@@ -2406,26 +2562,35 @@ const DailyReportPage: React.FC = () => {
           </Button>
           <Button
             variant="contained"
-            onClick={() => {
-              const updated = weeklyAccEntries.map((e, idx) => {
-                if ((e.id && e.id === editAccDateDialog.rowId) || idx === editAccDateDialog.rowId) {
-                  return { ...e, dateStart: editAccDateDialog.dateStart, dateEnd: editAccDateDialog.dateEnd };
+            onClick={async () => {
+              try {
+                if (typeof editAccDateDialog.rowId === 'number') {
+                  await apiRequest(`/api/weekly/${editAccDateDialog.rowId}`, {
+                    method: 'PUT',
+                    bodyData: {
+                      date: editAccDateDialog.dateStart,
+                      date_end: editAccDateDialog.dateEnd || null,
+                      work: editAccDateDialog.work,
+                      responsible_person: 'Self'
+                    }
+                  });
                 }
-                return e;
-              });
-              setWeeklyAccEntries(updated);
-              localStorage.setItem(`weekly_acc_entries_${user?.empId}`, JSON.stringify(updated));
 
-              // Add to editedDates to enforce one-time edit limit
-              const updatedEdited = {
-                ...editedDates,
-                accomplishments: [...(editedDates.accomplishments || []), editAccDateDialog.rowId]
-              };
-              setEditedDates(updatedEdited);
-              localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+                // Add to editedDates to enforce one-time edit limit
+                const updatedEdited = {
+                  ...editedDates,
+                  accomplishments: [...(editedDates.accomplishments || []), editAccDateDialog.rowId]
+                };
+                setEditedDates(updatedEdited);
+                localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
 
-              setSnack({ open: true, msg: 'Accomplishment dates updated successfully!', severity: 'success' });
-              setEditAccDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', work: '' });
+                setSnack({ open: true, msg: 'Accomplishment dates updated successfully!', severity: 'success' });
+                setEditAccDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', work: '' });
+                fetchAccomplishments();
+                fetchWeekly();
+              } catch (err: any) {
+                setSnack({ open: true, msg: err.message || 'Failed to update dates', severity: 'error' });
+              }
             }}
             sx={{ bgcolor: '#0284c7', '&:hover': { bgcolor: '#0369a1' } }}
           >
@@ -2451,7 +2616,7 @@ const DailyReportPage: React.FC = () => {
           </Box>
 
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Date of Commencement"
@@ -2461,7 +2626,7 @@ const DailyReportPage: React.FC = () => {
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Date of Completion"
@@ -2471,17 +2636,13 @@ const DailyReportPage: React.FC = () => {
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="Status as on"
-                type="date"
-                value={editPendingDateDialog.statusDate}
-                onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, statusDate: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
           </Grid>
+          <TextField
+            fullWidth
+            label="Status as on"
+            value={editPendingDateDialog.statusDate}
+            onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, statusDate: e.target.value }))}
+          />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' })} color="inherit">

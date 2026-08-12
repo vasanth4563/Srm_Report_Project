@@ -76,7 +76,7 @@ class PendingWork(Base):
     responsible_person = Column(String(100))
     date_start = Column(Date, nullable=False)
     date_end = Column(Date)
-    status_date = Column(Date)
+    status_date = Column(String(255))
     remarks = Column(Text)
     completed = Column(Boolean, default=True)
 
@@ -89,6 +89,7 @@ class WeeklyPlan(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     date = Column(Date, nullable=False)
+    date_end = Column(Date, nullable=True)
     work = Column(Text, nullable=False)
     responsible_person = Column(String(100), default="Self")
     completed = Column(Boolean, default=True)

@@ -4,8 +4,38 @@ from .database import engine, Base, SessionLocal
 from .models import User
 from .routers import auth_router, report_router, goal_router, acc_router, pending_router, weekly_router, admin_router, edit_request_router
 
-# Initialize tables
+# Initialize tables (triggers uvicorn reload)
 Base.metadata.create_all(bind=engine)
+
+def run_date_end_migration():
+    db = SessionLocal()
+    try:
+        db.execute(text("ALTER TABLE weekly_plans ADD COLUMN date_end DATE NULL"))
+        db.commit()
+        print("[MIGRATION] Successfully added date_end to weekly_plans")
+    except Exception as e:
+        db.rollback()
+        print(f"[MIGRATION INFO] Could not add date_end (it might already exist): {e}")
+    finally:
+        db.close()
+
+from sqlalchemy import text
+run_date_end_migration()
+
+def copy_logo_file():
+    import shutil
+    import os
+    src = r"C:\Users\vasan\.gemini\antigravity\brain\bb7d008d-2bb3-4c53-a1d3-6c900d55fe53\.user_uploaded\media__1785990847082.jpg"
+    dest = r"c:\Users\vasan\OneDrive\Desktop\Report\public\srm_logo.jpg"
+    if os.path.exists(src):
+        try:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.copy(src, dest)
+            print("[LOGO COPY] Successfully copied logo to public/srm_logo.jpg")
+        except Exception as e:
+            print(f"[LOGO COPY ERROR] {e}")
+
+copy_logo_file()
 
 def sync_user_roles():
     db = SessionLocal()

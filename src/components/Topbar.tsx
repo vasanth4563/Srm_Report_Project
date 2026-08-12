@@ -55,9 +55,6 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
         </IconButton>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, overflow: 'hidden' }}>
-          <Box sx={{ display: { xs: 'flex', md: 'none' }, flexShrink: 0 }}>
-            <BrandLogo size={32} />
-          </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, overflow: 'hidden' }}>
               <Typography variant="h6" noWrap sx={{

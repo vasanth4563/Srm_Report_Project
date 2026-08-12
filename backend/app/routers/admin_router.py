@@ -16,21 +16,28 @@ def get_users_report_summary(
     result = []
     
     for u in users:
-        # Count across all 5 activity modules
-        rep_total = db.query(func.count(models.DailyReport.id)).filter(models.DailyReport.user_id == u.id).scalar() or 0
-        rep_done = db.query(func.count(models.DailyReport.id)).filter(models.DailyReport.user_id == u.id, models.DailyReport.completed == True).scalar() or 0
+        # Daily reports: 1 completed day = 10% progress (10 days = 100%)
+        rep_done = db.query(func.count(models.DailyReport.id)).filter(
+            models.DailyReport.user_id == u.id,
+            models.DailyReport.completed == True
+        ).scalar() or 0
+        rep_total = 10
         
-        goal_total = db.query(func.count(models.Goal100Days.id)).filter(models.Goal100Days.user_id == u.id).scalar() or 0
+        # 100 Days Goals progress (1 completed goal = 1% progress)
         goal_done = db.query(func.count(models.Goal100Days.id)).filter(models.Goal100Days.user_id == u.id, models.Goal100Days.completed == True).scalar() or 0
+        goal_total = 100
 
-        acc_total = db.query(func.count(models.Accomplishment.id)).filter(models.Accomplishment.user_id == u.id).scalar() or 0
-        acc_done = db.query(func.count(models.Accomplishment.id)).filter(models.Accomplishment.user_id == u.id, models.Accomplishment.completed == True).scalar() or 0
+        # Accomplishments progress (1 accomplishment = 1% progress)
+        acc_done = db.query(func.count(models.WeeklyPlan.id)).filter(models.WeeklyPlan.user_id == u.id).scalar() or 0
+        acc_total = 100
 
-        pend_total = db.query(func.count(models.PendingWork.id)).filter(models.PendingWork.user_id == u.id).scalar() or 0
-        pend_done = db.query(func.count(models.PendingWork.id)).filter(models.PendingWork.user_id == u.id, models.PendingWork.completed == True).scalar() or 0
+        # Pending Work progress (1 pending work = 1% progress)
+        pend_done = db.query(func.count(models.PendingWork.id)).filter(models.PendingWork.user_id == u.id).scalar() or 0
+        pend_total = 100
 
-        week_total = db.query(func.count(models.WeeklyPlan.id)).filter(models.WeeklyPlan.user_id == u.id).scalar() or 0
-        week_done = db.query(func.count(models.WeeklyPlan.id)).filter(models.WeeklyPlan.user_id == u.id, models.WeeklyPlan.completed == True).scalar() or 0
+        # Weekly Plans progress (1 weekly plan = 1% progress)
+        week_done = db.query(func.count(models.WeeklyPlan.id)).filter(models.WeeklyPlan.user_id == u.id).scalar() or 0
+        week_total = 100
 
         total = rep_total + goal_total + acc_total + pend_total + week_total
         done = rep_done + goal_done + acc_done + pend_done + week_done
@@ -54,7 +61,7 @@ def get_users_report_summary(
             "pendingReports": pending,
             "progressPct": progress_pct,
             "moduleBreakdown": {
-                "daily": {"done": rep_done, "total": rep_total, "pct": round(rep_done/rep_total*100, 1) if rep_total>0 else 0.0},
+                "daily": {"done": rep_done, "total": rep_total, "pct": min(round(rep_done/rep_total*100, 1), 100.0) if rep_total>0 else 0.0},
                 "goals": {"done": goal_done, "total": goal_total, "pct": round(goal_done/goal_total*100, 1) if goal_total>0 else 0.0},
                 "acc": {"done": acc_done, "total": acc_total, "pct": round(acc_done/acc_total*100, 1) if acc_total>0 else 0.0},
                 "pending": {"done": pend_done, "total": pend_total, "pct": round(pend_done/pend_total*100, 1) if pend_total>0 else 0.0},

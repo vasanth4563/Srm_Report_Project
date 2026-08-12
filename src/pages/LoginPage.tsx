@@ -32,7 +32,7 @@ const LoginPage: React.FC = () => {
   // ── Users list state
   const [runtimeUsers, setRuntimeUsers] = useState<any[]>([]);
 
-  // Fetch users from database on load
+  // Fetch users list on load
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -104,10 +104,35 @@ const LoginPage: React.FC = () => {
 
             {/* ── Brand ── */}
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3.5 }}>
-              <Box sx={{ mb: 1.5, transition: 'transform 0.3s ease', '&:hover': { transform: 'scale(1.05)' } }}>
-                <BrandLogo size={44} variant="full" />
+              <Box sx={{
+                width: 220,
+                height: 60,
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'transform 0.3s ease',
+                '&:hover': { transform: 'scale(1.05)' }
+              }}>
+                <Box
+                  component="img"
+                  src="/srm_logo.jpg"
+                  onError={(e: any) => {
+                    e.currentTarget.style.display = 'none';
+                    const fb = document.getElementById('logo-fallback');
+                    if (fb) fb.style.display = 'inline-flex';
+                  }}
+                  sx={{
+                    height: 120, // keep image large
+                    objectFit: 'contain',
+                    transform: 'translateY(-2px)' // center the logo content vertically
+                  }}
+                />
+                <Box id="logo-fallback" sx={{ display: 'none' }}>
+                  <BrandLogo size={44} variant="full" />
+                </Box>
               </Box>
-              <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5 }}>
+              <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 1 }}>
                 Dashboard Reports and Reviews
               </Typography>
             </Box>

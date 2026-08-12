@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Card, CardContent, Typography, Grid, Avatar,
   useTheme, alpha, Fade, Chip, Menu, MenuItem, IconButton,
@@ -37,12 +37,24 @@ import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
+import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
 import { Switch, Tooltip } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
 import Layout from '../components/Layout.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiRequest } from '../utils/api.ts';
+
+const formatDateDMY = (dateStr: string) => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
 
 const DashboardPage: React.FC = () => {
   const theme = useTheme();
@@ -100,6 +112,64 @@ const DashboardPage: React.FC = () => {
     };
     fetchStatsData();
   }, [user]);
+  // Helper to format ISO date to readable string (e.g. 11 Aug 2026)
+  const formatFmtDate = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+    } catch (e) {}
+    return dateStr;
+  };
+
+  const getPreviousWorkingDayStr = (todayDate: Date): string => {
+    const day = todayDate.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+    const prev = new Date(todayDate);
+    if (day === 1) {
+      // Monday -> previous working day is Friday (subtract 3 days)
+      prev.setDate(todayDate.getDate() - 3);
+    } else if (day === 0) {
+      // Sunday -> previous working day is Friday (subtract 2 days)
+      prev.setDate(todayDate.getDate() - 2);
+    } else {
+      // Other days -> previous is yesterday (subtract 1 day)
+      prev.setDate(todayDate.getDate() - 1);
+    }
+    return prev.toISOString().split('T')[0];
+  };
+
+  const todayDateObj = new Date();
+  const prevWorkingDay = getPreviousWorkingDayStr(todayDateObj);
+  const prevWorkingDayFormatted = formatFmtDate(prevWorkingDay);
+  
+  // Check if yesterday's working day report is missing (excluding Sundays and Saturdays for today's check)
+  const isSundayOrSaturday = todayDateObj.getDay() === 0 || todayDateObj.getDay() === 6;
+  const isPrevReportMissing = user?.role === 'user' && !isSundayOrSaturday && reports.length > 0 && !reports.some((r) => r.date === prevWorkingDay);
+
+  // Silently trigger email notification if yesterday's report is missing
+  useEffect(() => {
+    if (isPrevReportMissing && prevWorkingDay) {
+      const storageKey = `missing_email_sent_${prevWorkingDay}_${user?.id}`;
+      const lastEmailed = localStorage.getItem(storageKey);
+      if (lastEmailed !== 'true') {
+        const sendEmailReminder = async () => {
+          try {
+            await apiRequest('/api/reports/email-alert', {
+              method: 'POST',
+              body: { missed_date_formatted: prevWorkingDayFormatted }
+            });
+            localStorage.setItem(storageKey, 'true');
+            console.log('Successfully sent missing daily report email warning.');
+          } catch (e) {
+            console.error('Failed to send missing daily report email warning:', e);
+          }
+        };
+        sendEmailReminder();
+      }
+    }
+  }, [isPrevReportMissing, prevWorkingDay, prevWorkingDayFormatted, user]);
 
   // Compute stats metrics dynamically from backend API data
   const totalReportsCount = reports.length;
@@ -138,6 +208,7 @@ const DashboardPage: React.FC = () => {
 
   // Dialog and view details state
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [progressDialogOpen, setProgressDialogOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<string>('daily');
   const [dialogData, setDialogData] = useState<any[]>([]);
   const [dialogLoading, setDialogLoading] = useState(false);
@@ -261,7 +332,24 @@ Portal: ${window.location.origin}/login`;
     setLoadingUsers(true);
     try {
       const usersData = await apiRequest<any[]>('/api/admin/users');
-      setUserRows(usersData);
+      
+      const getWeight = (name: string) => {
+        const n = name.toLowerCase();
+        if (n.includes('aania')) return 2;
+        if (n.includes('subashini')) return 1;
+        return 0;
+      };
+
+      const sorted = [...usersData].sort((a, b) => {
+        const wA = getWeight(a.name || '');
+        const wB = getWeight(b.name || '');
+        if (wA !== wB) {
+          return wB - wA; // Higher weight first
+        }
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+      setUserRows(sorted);
     } catch (err) {
       console.error('Failed to load employee list:', err);
     } finally {
@@ -288,8 +376,9 @@ Portal: ${window.location.origin}/login`;
     if (!userToFetch) return;
     setSelectedReportType(type);
     setReportDialogOpen(true);
-    setDialogLoading(true);
     handleCloseMenu();
+
+    setDialogLoading(true);
 
     // Map report types to routes
     const endpointMap: Record<string, string> = {
@@ -373,19 +462,25 @@ Portal: ${window.location.origin}/login`;
     {
       field: 'totalReports', headerName: 'Total', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
       renderCell: (p) => (
-        <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography>
+        </Box>
       )
     },
     {
       field: 'doneReports', headerName: 'Completed', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
       renderCell: (p) => (
-        <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 700, fontSize: 11 }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+          <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 700, fontSize: 11 }} />
+        </Box>
       )
     },
     {
       field: 'pendingReports', headerName: 'Pending', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
       renderCell: (p) => (
-        <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 700, fontSize: 11 }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+          <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 700, fontSize: 11 }} />
+        </Box>
       )
     },
     {
@@ -405,6 +500,13 @@ Portal: ${window.location.origin}/login`;
     },
   ];
 
+  const columnsToRender = useMemo(() => {
+    if (user?.role === 'chairman') {
+      return userColumns.filter(col => col.field !== 'progressPct');
+    }
+    return userColumns;
+  }, [user, userColumns]);
+
   const gridSx = {
     border: 'none',
     '& .MuiDataGrid-columnHeaders': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(99,102,241,0.04)', borderBottom: `1px solid ${theme.palette.divider}` },
@@ -414,7 +516,220 @@ Portal: ${window.location.origin}/login`;
     '& .MuiDataGrid-footerContainer': { borderTop: `1px solid ${theme.palette.divider}`, justifyContent: 'center' },
   };
 
+  const renderMiniProgressChart = (targetUser: any) => {
+    if (!targetUser) return null;
+    
+    const categories = [
+      { key: 'daily', color: '#6366f1' },
+      { key: 'goals', color: '#06b6d4' },
+      { key: 'acc', color: '#10b981' },
+      { key: 'pending', color: '#ef4444' },
+      { key: 'weekly', color: '#8b5cf6' },
+    ];
+    
+    const segments = categories.map(cat => {
+      const stats = targetUser.moduleBreakdown?.[cat.key] || { done: 0, total: 0 };
+      return {
+        value: stats.done,
+        color: cat.color,
+      };
+    });
+    
+    const totalCompleted = segments.reduce((sum, seg) => sum + seg.value, 0);
+    const radius = 22.1;
+    const strokeWidth = 5.2;
+    const circumference = 2 * Math.PI * radius;
+    const overallPct = targetUser.progressPct || 0;
+
+    return (
+      <Tooltip
+        title={
+          <Box sx={{ p: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>Overall Progress: {overallPct}%</Typography>
+            <Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>
+              Completed: {targetUser.doneReports} / {targetUser.totalReports} reports
+            </Typography>
+            {categories.map(c => {
+              const stats = targetUser.moduleBreakdown?.[c.key] || { done: 0, total: 0, pct: 0 };
+              const labels: Record<string, string> = {
+                daily: 'Daily Reports',
+                goals: '100 Days Goals',
+                acc: 'Accomplishments',
+                pending: 'Pending Work',
+                weekly: 'Weekly Plans'
+              };
+              return (
+                <Typography key={c.key} variant="caption" display="block" sx={{ color: c.color, fontWeight: 600 }}>
+                  • {labels[c.key]}: {stats.done}/{stats.total} ({stats.pct}%)
+                </Typography>
+              );
+            })}
+          </Box>
+        }
+        arrow
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <Typography variant="caption" sx={{ fontWeight: 850, color: theme.palette.text.secondary, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Overall Progress
+            </Typography>
+          </Box>
+          <Box sx={{ position: 'relative', width: 90, height: 90 }}>
+            <svg width="90" height="90" viewBox="0 0 50 50">
+              <circle
+                cx="25"
+                cy="25"
+                r={radius}
+                fill="transparent"
+                stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
+                strokeWidth={strokeWidth}
+              />
+              
+              {totalCompleted === 0 ? (
+                <circle
+                  cx="25"
+                  cy="25"
+                  r={radius}
+                  fill="transparent"
+                  stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}
+                  strokeWidth={strokeWidth}
+                />
+              ) : (
+                <g transform="rotate(-90 25 25)">
+                  {segments.map((seg, idx) => {
+                    if (seg.value === 0) return null;
+                    const segmentPercent = seg.value / totalCompleted;
+                    const strokeDasharray = `${segmentPercent * circumference} ${circumference}`;
+                    
+                    let offset = 0;
+                    for (let i = 0; i < idx; i++) {
+                      if (segments[i].value > 0) {
+                        offset += (segments[i].value / totalCompleted);
+                      }
+                    }
+                    const strokeDashoffset = -offset * circumference;
+                    
+                    return (
+                      <circle
+                        key={idx}
+                        cx="25"
+                        cy="25"
+                        r={radius}
+                        fill="transparent"
+                        stroke={seg.color}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={strokeDasharray}
+                        strokeDashoffset={strokeDashoffset}
+                      />
+                    );
+                  })}
+                </g>
+              )}
+              
+              {/* Center percentage text */}
+              <text
+                x="25"
+                y="29"
+                textAnchor="middle"
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 900,
+                  fill: theme.palette.text.primary,
+                  fontFamily: 'Outfit, Inter, sans-serif'
+                }}
+              >
+                {overallPct}%
+              </text>
+            </svg>
+          </Box>
+        </Box>
+      </Tooltip>
+    );
+  };
+
+  const categoryDetails: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+    daily: { label: 'Daily Reports', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.06)', icon: '📝' },
+    goals: { label: '100 Days Goals', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.06)', icon: '🎯' },
+    acc: { label: 'Accomplishment Report', color: '#10b981', bg: 'rgba(16, 185, 129, 0.06)', icon: '🏆' },
+    pending: { label: 'Pending & Priority Work', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.06)', icon: '⏳' },
+    weekly: { label: 'Weekly Plans', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.06)', icon: '📅' },
+  };
+
   const renderDialogContent = () => {
+    const cat = categoryDetails[selectedReportType] || { label: selectedReportType, color: '#4c248b', bg: 'rgba(76, 36, 139, 0.06)', icon: '📊' };
+    const stats = menuUser?.moduleBreakdown?.[selectedReportType] || { done: 0, total: 0, pct: 0 };
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Compact Category Progress Card */}
+        <Box
+          sx={{
+            borderRadius: '12px',
+            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : cat.bg,
+            p: 1.5,
+            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : alpha(cat.color, 0.15)}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+              <Avatar
+                sx={{
+                  bgcolor: alpha(cat.color, 0.12),
+                  color: cat.color,
+                  width: 32,
+                  height: 32,
+                  fontSize: 15,
+                  fontWeight: 800,
+                }}
+              >
+                {cat.icon}
+              </Avatar>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: theme.palette.text.primary, lineHeight: 1.1, fontSize: 13.5 }}>
+                  {cat.label} Progress
+                </Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, fontSize: 11 }}>
+                  Completion Status: completed
+                </Typography>
+              </Box>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: cat.color, lineHeight: 1, fontSize: 18 }}>
+                {stats.pct}%
+              </Typography>
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, fontSize: 10 }}>
+                Progress
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ width: '100%' }}>
+            <LinearProgress
+              variant="determinate"
+              value={stats.pct}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                '& .MuiLinearProgress-bar': {
+                  bgcolor: cat.color,
+                  borderRadius: 3,
+                },
+              }}
+            />
+          </Box>
+        </Box>
+
+        {/* Tab Table Content */}
+        {renderTableContent()}
+      </Box>
+    );
+  };
+
+  const renderTableContent = () => {
     if (dialogLoading) {
       return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
@@ -437,12 +752,25 @@ Portal: ${window.location.origin}/login`;
     switch (selectedReportType) {
       case 'daily':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <Table size="small">
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 800 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
                   {['Sl.No', 'Area', 'Report Details', 'Date', 'Status'].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13, color: headerTextColor, py: 1.5 }}>{h}</TableCell>
+                    <TableCell 
+                      key={h} 
+                      align={h === 'Status' ? 'center' : 'left'}
+                      sx={{ 
+                        fontWeight: 800, 
+                        fontSize: 13, 
+                        color: headerTextColor, 
+                        py: 1.5,
+                        width: h === 'Status' ? 120 : 'auto',
+                        minWidth: h === 'Status' ? 120 : 'auto'
+                      }}
+                    >
+                      {h}
+                    </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -455,7 +783,7 @@ Portal: ${window.location.origin}/login`;
                     </TableCell>
                     <TableCell sx={{ minWidth: 280, fontSize: 13, color: theme.palette.text.primary }}>{row.report}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{row.date}</TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ width: 120, minWidth: 120 }}>
                       <Chip
                         label={row.completed ? 'Completed' : 'Pending'}
                         size="small"
@@ -474,12 +802,25 @@ Portal: ${window.location.origin}/login`;
         );
       case 'reports':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <Table size="small">
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 800 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
                   {['Sl.No', 'Area', 'Report Details', 'Date', 'Status'].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                    <TableCell 
+                      key={h} 
+                      align={h === 'Status' ? 'center' : 'left'}
+                      sx={{ 
+                        fontWeight: 800, 
+                        fontSize: 13.5, 
+                        color: headerTextColor, 
+                        py: 1.25,
+                        width: h === 'Status' ? 120 : 'auto',
+                        minWidth: h === 'Status' ? 120 : 'auto'
+                      }}
+                    >
+                      {h}
+                    </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -492,7 +833,7 @@ Portal: ${window.location.origin}/login`;
                     </TableCell>
                     <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.report}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date}</TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ width: 120, minWidth: 120 }}>
                       <Chip
                         label={row.completed ? 'Completed' : 'Pending'}
                         size="small"
@@ -511,12 +852,25 @@ Portal: ${window.location.origin}/login`;
         );
       case 'goals':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <Table size="small">
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
                   {['Sl.No', 'Date', 'Goal Details', 'Status'].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                    <TableCell 
+                      key={h} 
+                      align={h === 'Status' ? 'center' : 'left'}
+                      sx={{ 
+                        fontWeight: 800, 
+                        fontSize: 13.5, 
+                        color: headerTextColor, 
+                        py: 1.25,
+                        width: h === 'Status' ? 120 : 'auto',
+                        minWidth: h === 'Status' ? 120 : 'auto'
+                      }}
+                    >
+                      {h}
+                    </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -526,7 +880,7 @@ Portal: ${window.location.origin}/login`;
                     <TableCell sx={{ fontWeight: 800, fontSize: 13, color: '#0369a1' }}>Day {String(row.day || index + 1).padStart(3, '0')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date}</TableCell>
                     <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.goal}</TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ width: 120, minWidth: 120 }}>
                       <Chip
                         label={row.completed ? 'Completed' : 'Pending'}
                         size="small"
@@ -545,12 +899,25 @@ Portal: ${window.location.origin}/login`;
         );
       case 'acc':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <Table size="small">
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 900 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
                   {['Sl.No', 'Area', 'Work Completed', 'Start Date', 'End Date', 'Status'].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
+                    <TableCell 
+                      key={h} 
+                      align={h === 'Status' ? 'center' : 'left'}
+                      sx={{ 
+                        fontWeight: 800, 
+                        fontSize: 13.5, 
+                        color: headerTextColor, 
+                        py: 1.25,
+                        width: h === 'Status' ? 120 : 'auto',
+                        minWidth: h === 'Status' ? 120 : 'auto'
+                      }}
+                    >
+                      {h}
+                    </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -562,9 +929,9 @@ Portal: ${window.location.origin}/login`;
                       <Chip label={row.area} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '12px' }} />
                     </TableCell>
                     <TableCell sx={{ minWidth: 260, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_end}</TableCell>
-                    <TableCell align="center">
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{formatDateDMY(row.date_start)}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{formatDateDMY(row.date_end)}</TableCell>
+                    <TableCell align="center" sx={{ width: 120, minWidth: 120 }}>
                       <Chip
                         label={row.completed ? 'Completed' : 'Pending'}
                         size="small"
@@ -583,11 +950,11 @@ Portal: ${window.location.origin}/login`;
         );
       case 'pending':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <Table size="small">
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 1000 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Areas', 'Particulars', 'Timeline', 'Remarks', 'Status'].map((h) => (
+                  {['Sl.No', 'Areas', 'Particulars', 'Date of Commencement', 'Status as on', 'Remarks', 'Date of Completion'].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -600,19 +967,10 @@ Portal: ${window.location.origin}/login`;
                       <Chip label={row.areas} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: '12px' }} />
                     </TableCell>
                     <TableCell sx={{ minWidth: 220, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.particulars}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start} to {row.date_end || '—'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start ? formatDateDMY(row.date_start) : '—'}</TableCell>
+                    <TableCell sx={{ fontSize: 13.5, color: theme.palette.text.secondary }}>{row.status_date || '—'}</TableCell>
                     <TableCell sx={{ fontSize: 13.5, color: theme.palette.text.secondary }}>{row.remarks || '—'}</TableCell>
-                    <TableCell align="center">
-                      <Chip
-                        label={row.completed ? 'Completed' : 'Pending'}
-                        size="small"
-                        sx={{
-                          fontWeight: 700, fontSize: 11, px: 1,
-                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
-                          color: '#ffffff'
-                        }}
-                      />
-                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_end ? formatDateDMY(row.date_end) : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -621,11 +979,11 @@ Portal: ${window.location.origin}/login`;
         );
       case 'weekly':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <Table size="small">
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Scheduled Week Range', 'Planned Work Details', 'Status'].map((h) => (
+                  {['Sl.No', 'Scheduled Week Range', 'Planned Work Details'].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13, color: headerTextColor, py: 1.5 }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -634,19 +992,8 @@ Portal: ${window.location.origin}/login`;
                 {dialogData.map((row, index) => (
                   <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
                     <TableCell sx={{ fontWeight: 700, width: 60 }}>{index + 1}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{row.date || `${row.date_start} → ${row.date_end}`}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{row.date ? formatDateDMY(row.date) : `${formatDateDMY(row.date_start)} → ${formatDateDMY(row.date_end)}`}</TableCell>
                     <TableCell sx={{ minWidth: 280, fontSize: 13 }}>{row.work}</TableCell>
-                    <TableCell align="center">
-                      <Chip
-                        label={row.completed ? 'Completed' : 'Pending'}
-                        size="small"
-                        sx={{
-                          fontWeight: 700, fontSize: 11, px: 1,
-                          bgcolor: row.completed ? '#1e7e34' : '#ef4444',
-                          color: '#ffffff'
-                        }}
-                      />
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1084,7 +1431,7 @@ Portal: ${window.location.origin}/login`;
                           }
                           return true;
                         })}
-                        columns={userColumns}
+                        columns={columnsToRender}
                         autoHeight
                         pageSizeOptions={[5, 10, 20]}
                         initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
@@ -1149,11 +1496,14 @@ Portal: ${window.location.origin}/login`;
             fullWidth
           >
             <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0, pt: 2.5, px: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-                <PeopleAltRoundedIcon sx={{ color: '#4c248b', fontSize: 26 }} />
-                <Typography variant="h5" sx={{ fontWeight: 800, color: theme.palette.text.primary }}>
-                  {menuUser ? `${menuUser.title || ''} ${menuUser.name} (${menuUser.designation})` : 'User Performance Summary'}
-                </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <PeopleAltRoundedIcon sx={{ color: '#4c248b', fontSize: 26 }} />
+                  <Typography variant="h5" sx={{ fontWeight: 800, color: theme.palette.text.primary, fontSize: { xs: 15, sm: 19 } }}>
+                    {menuUser ? `${menuUser.title || ''} ${menuUser.name} (${menuUser.designation})` : 'User Performance Summary'}
+                  </Typography>
+                </Box>
+                {menuUser && renderMiniProgressChart(menuUser)}
               </Box>
               <Tabs
                 value={selectedReportType}
@@ -1187,67 +1537,251 @@ Portal: ${window.location.origin}/login`;
               </Tabs>
             </DialogTitle>
             <DialogContent dividers sx={{ p: 3 }}>
-              {menuUser && (
-                <Card sx={{ mb: 3, p: 2.5, borderRadius: '16px', background: alpha(theme.palette.primary.main, 0.04), border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}` }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Individual Staff Overall Progress</Typography>
-                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                        Computed across all 5 report module tables for {menuUser.name} ({menuUser.designation})
-                      </Typography>
-                    </Box>
-                    <Chip
-                      label={`${menuUser.progressPct || 0}% Overall Progress (${menuUser.doneReports}/${menuUser.totalReports} Completed)`}
-                      color={menuUser.progressPct >= 75 ? 'success' : 'warning'}
-                      sx={{ fontWeight: 800, fontSize: 12 }}
-                    />
-                  </Box>
-
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(menuUser.progressPct || 0, 100)}
-                    sx={{
-                      height: 8, borderRadius: 4, mb: 2,
-                      bgcolor: alpha(theme.palette.primary.main, 0.12),
-                      '& .MuiLinearProgress-bar': { borderRadius: 4, background: 'linear-gradient(90deg, #10b981, #6366f1)' }
-                    }}
-                  />
-
-                  {/* Category Breakdown */}
-                  {menuUser.moduleBreakdown && (
-                    <Grid container spacing={1.5}>
-                      {[
-                        { label: 'Daily Reports', key: 'daily', color: '#6366f1' },
-                        { label: '100 Days Goals', key: 'goals', color: '#06b6d4' },
-                        { label: 'Accomplishments', key: 'acc', color: '#10b981' },
-                        { label: 'Pending Work', key: 'pending', color: '#ef4444' },
-                        { label: 'Weekly Plans', key: 'weekly', color: '#8b5cf6' },
-                      ].map((m) => {
-                        const stats = menuUser.moduleBreakdown?.[m.key] || { done: 0, total: 0, pct: 0 };
-                        return (
-                          <Grid item xs={6} sm={2.4} key={m.key}>
-                            <Box
-                              onClick={() => handleSelectReport(m.key)}
-                              sx={{
-                                p: 1, borderRadius: '10px', bgcolor: alpha(m.color, 0.08),
-                                border: `1px solid ${alpha(m.color, 0.2)}`, textAlign: 'center', cursor: 'pointer',
-                                '&:hover': { bgcolor: alpha(m.color, 0.15) }, transition: 'all 0.2s',
-                              }}
-                            >
-                              <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', color: m.color, fontSize: 11 }}>{m.label}</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 800, fontSize: 13, my: 0.25 }}>{stats.pct}%</Typography>
-                              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: 10 }}>{stats.done}/{stats.total} Completed</Typography>
-                            </Box>
-                          </Grid>
-                        );
-                      })}
-                    </Grid>
-                  )}
-                </Card>
-              )}
-
               {renderDialogContent()}
             </DialogContent>
+            <DialogActions sx={{ px: 3, py: 1.5 }}>
+              <Button 
+                variant="outlined" 
+                onClick={() => setReportDialogOpen(false)}
+                sx={{
+                  borderRadius: '10px',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  px: 3,
+                  borderColor: theme.palette.divider,
+                  color: theme.palette.text.secondary,
+                  '&:hover': {
+                    bgcolor: alpha(theme.palette.text.secondary, 0.04),
+                    borderColor: theme.palette.text.secondary,
+                  }
+                }}
+              >
+                Cancel
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Custom SVG Donut Chart Progress Dialog */}
+          <Dialog
+            open={progressDialogOpen}
+            onClose={() => setProgressDialogOpen(false)}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+              sx: {
+                borderRadius: '24px',
+                p: 1.5,
+              }
+            }}
+          >
+            <DialogTitle sx={{ fontWeight: 800, pb: 1, pt: 2, px: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: theme.palette.text.primary }}>
+                  Staff Progress Analysis
+                </Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
+                  {menuUser ? `${menuUser.title || ''} ${menuUser.name} (${menuUser.designation})` : ''}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setProgressDialogOpen(false)} size="small" sx={{ color: theme.palette.text.secondary }}>
+                <ClearRoundedIcon />
+              </IconButton>
+            </DialogTitle>
+            
+            <DialogContent sx={{ px: 3, py: 2 }}>
+              {menuUser && (() => {
+                const categories = [
+                  { label: 'Daily Reports', key: 'daily', color: '#6366f1' },
+                  { label: '100 Days Goals', key: 'goals', color: '#06b6d4' },
+                  { label: 'Accomplishments', key: 'acc', color: '#10b981' },
+                  { label: 'Pending Work', key: 'pending', color: '#ef4444' },
+                  { label: 'Weekly Plans', key: 'weekly', color: '#8b5cf6' },
+                ];
+                
+                const segments = categories.map(cat => {
+                  const stats = menuUser.moduleBreakdown?.[cat.key] || { done: 0, total: 0, pct: 0 };
+                  return {
+                    label: cat.label,
+                    value: stats.done,
+                    total: stats.total,
+                    pct: stats.pct,
+                    color: cat.color,
+                  };
+                });
+                
+                const totalCompleted = segments.reduce((sum, seg) => sum + seg.value, 0);
+                const radius = 50;
+                const strokeWidth = 16;
+                const circumference = 2 * Math.PI * radius;
+                
+                return (
+                  <Grid container spacing={4} alignItems="center">
+                    {/* Left: Donut Chart */}
+                    <Grid item xs={12} sm={5} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <Box sx={{ position: 'relative', width: 170, height: 170 }}>
+                        <svg width="170" height="170" viewBox="0 0 150 150">
+                          {/* Background Track */}
+                          <circle
+                            cx="75"
+                            cy="75"
+                            r={radius}
+                            fill="transparent"
+                            stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
+                            strokeWidth={strokeWidth}
+                          />
+                          
+                          {totalCompleted === 0 ? (
+                            <circle
+                              cx="75"
+                              cy="75"
+                              r={radius}
+                              fill="transparent"
+                              stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}
+                              strokeWidth={strokeWidth}
+                            />
+                          ) : (
+                            <g transform="rotate(-90 75 75)">
+                              {segments.map((seg, idx) => {
+                                if (seg.value === 0) return null;
+                                const segmentPercent = seg.value / totalCompleted;
+                                const strokeDasharray = `${segmentPercent * circumference} ${circumference}`;
+                                
+                                // Calculate cumulative offset
+                                let offset = 0;
+                                for (let i = 0; i < idx; i++) {
+                                  if (segments[i].value > 0) {
+                                    offset += (segments[i].value / totalCompleted);
+                                  }
+                                }
+                                const strokeDashoffset = -offset * circumference;
+                                
+                                return (
+                                  <circle
+                                    key={idx}
+                                    cx="75"
+                                    cy="75"
+                                    r={radius}
+                                    fill="transparent"
+                                    stroke={seg.color}
+                                    strokeWidth={strokeWidth}
+                                    strokeDasharray={strokeDasharray}
+                                    strokeDashoffset={strokeDashoffset}
+                                  />
+                                );
+                              })}
+                            </g>
+                          )}
+                          
+                          {/* Center Text */}
+                          <text
+                            x="75"
+                            y="70"
+                            textAnchor="middle"
+                            style={{
+                              fontSize: '22px',
+                              fontWeight: 850,
+                              fill: theme.palette.text.primary,
+                              fontFamily: 'Inter, system-ui, sans-serif'
+                            }}
+                          >
+                            {menuUser.progressPct || 0}%
+                          </text>
+                          <text
+                            x="75"
+                            y="88"
+                            textAnchor="middle"
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              fill: theme.palette.text.secondary,
+                              textTransform: 'uppercase',
+                              letterSpacing: '1.2px',
+                              fontFamily: 'Inter, system-ui, sans-serif'
+                            }}
+                          >
+                            Overall
+                          </text>
+                          <text
+                            x="75"
+                            y="102"
+                            textAnchor="middle"
+                            style={{
+                              fontSize: '8px',
+                              fontWeight: 600,
+                              fill: theme.palette.text.secondary,
+                              fontFamily: 'Inter, system-ui, sans-serif'
+                            }}
+                          >
+                            {menuUser.doneReports}/{menuUser.totalReports} Done
+                          </text>
+                        </svg>
+                      </Box>
+                    </Grid>
+                    
+                    {/* Right: Legend & Breakdowns */}
+                    <Grid item xs={12} sm={7}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {segments.map((seg, idx) => (
+                          <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Box sx={{ width: 12, height: 12, borderRadius: '4px', bgcolor: seg.color, flexShrink: 0 }} />
+                                <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13, color: theme.palette.text.primary }}>
+                                  {seg.label}
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 800, fontSize: 13, color: seg.color }}>
+                                {seg.pct}%
+                              </Typography>
+                            </Box>
+                            <Box sx={{ pl: 3.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: 11 }}>
+                                {seg.value} of {seg.total} completed
+                              </Typography>
+                              <LinearProgress
+                                variant="determinate"
+                                value={seg.pct}
+                                sx={{
+                                  width: 90,
+                                  height: 5,
+                                  borderRadius: 2.5,
+                                  bgcolor: alpha(seg.color, 0.1),
+                                  '& .MuiLinearProgress-bar': {
+                                    borderRadius: 2.5,
+                                    bgcolor: seg.color
+                                  }
+                                }}
+                              />
+                            </Box>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Grid>
+                  </Grid>
+                );
+              })()}
+            </DialogContent>
+            
+            <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'flex-end' }}>
+              <Button 
+                variant="outlined" 
+                onClick={() => setProgressDialogOpen(false)}
+                sx={{
+                  borderRadius: '10px',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  px: 3,
+                  borderColor: theme.palette.divider,
+                  color: theme.palette.text.primary,
+                  '&:hover': {
+                    bgcolor: alpha(theme.palette.text.primary, 0.04),
+                    borderColor: theme.palette.text.primary,
+                  }
+                }}
+              >
+                Close Analysis
+              </Button>
+            </DialogActions>
           </Dialog>
 
           {/* Admin Edit Access Requests Approval Dialog */}

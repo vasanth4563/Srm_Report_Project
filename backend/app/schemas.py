@@ -70,7 +70,7 @@ class DailyReportBase(BaseModel):
     date: date
     area: str
     report: str
-    completed: Optional[bool] = False
+    completed: Optional[bool] = True
 
 class DailyReportCreate(DailyReportBase):
     pass
@@ -88,7 +88,7 @@ class GoalBase(BaseModel):
     date: date
     goal: str
     responsible_person: Optional[str] = "Self"
-    completed: Optional[bool] = False
+    completed: Optional[bool] = True
 
 class GoalCreate(GoalBase):
     pass
@@ -125,7 +125,7 @@ class PendingWorkBase(BaseModel):
     responsible_person: Optional[str] = None
     date_start: date
     date_end: Optional[date] = None
-    status_date: Optional[date] = None
+    status_date: Optional[str] = None
     remarks: Optional[str] = None
     completed: Optional[bool] = False
 
@@ -142,9 +142,10 @@ class PendingWorkResponse(PendingWorkBase):
 # Weekly Plan Schemas
 class WeeklyPlanBase(BaseModel):
     date: date
+    date_end: Optional[date] = None
     work: str
     responsible_person: Optional[str] = "Self"
-    completed: Optional[bool] = False
+    completed: Optional[bool] = True
 
 class WeeklyPlanCreate(WeeklyPlanBase):
     pass
