@@ -55,6 +55,20 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
         </IconButton>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, overflow: 'hidden' }}>
+          <Box
+            component="img"
+            src="/srm_logo.jpg"
+            sx={{
+              height: { xs: 38, sm: 48 },
+              borderRadius: '6px',
+              bgcolor: '#ffffff',
+              p: { xs: '3px 8px', sm: '4px 12px' },
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              flexShrink: 0,
+              objectFit: 'contain'
+            }}
+          />
           <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, overflow: 'hidden' }}>
               <Typography variant="h6" noWrap sx={{

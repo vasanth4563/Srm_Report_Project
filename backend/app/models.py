@@ -34,6 +34,7 @@ class DailyReport(Base):
     area = Column(String(100), nullable=False)
     report = Column(Text, nullable=False)
     completed = Column(Boolean, default=True)
+    edited_once = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="daily_reports")
 
@@ -76,7 +77,7 @@ class PendingWork(Base):
     responsible_person = Column(String(100))
     date_start = Column(Date, nullable=False)
     date_end = Column(Date)
-    status_date = Column(String(255))
+    status = Column(String(255))
     remarks = Column(Text)
     completed = Column(Boolean, default=True)
 

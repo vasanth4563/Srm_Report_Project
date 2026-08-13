@@ -31,7 +31,7 @@ def create_pending_work(
         responsible_person=data.responsible_person,
         date_start=data.date_start,
         date_end=data.date_end,
-        status_date=data.status_date,
+        status=data.status,
         remarks=data.remarks,
         completed=data.completed if data.completed is not None else False
     )
@@ -59,7 +59,7 @@ def update_pending_work(
     pending.responsible_person = data.responsible_person
     pending.date_start = data.date_start
     pending.date_end = data.date_end
-    pending.status_date = data.status_date
+    pending.status = data.status
     pending.remarks = data.remarks
     if data.completed is not None:
         pending.completed = data.completed

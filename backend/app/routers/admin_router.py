@@ -16,12 +16,22 @@ def get_users_report_summary(
     result = []
     
     for u in users:
-        # Daily reports: 1 completed day = 10% progress (10 days = 100%)
-        rep_done = db.query(func.count(models.DailyReport.id)).filter(
+        # Daily reports: 100% progress if user submitted today (IST)
+        import datetime
+        ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+        today_date = ist_now.date()
+        
+        has_today_report = db.query(models.DailyReport).filter(
             models.DailyReport.user_id == u.id,
+            models.DailyReport.date == today_date,
             models.DailyReport.completed == True
-        ).scalar() or 0
-        rep_total = 10
+        ).first() is not None
+        
+        rep_done = 1 if has_today_report else 0
+        rep_total = 1
+        
+        rep_weight_done = 100 if has_today_report else 0
+        rep_weight_total = 100
         
         # 100 Days Goals progress (1 completed goal = 1% progress)
         goal_done = db.query(func.count(models.Goal100Days.id)).filter(models.Goal100Days.user_id == u.id, models.Goal100Days.completed == True).scalar() or 0
@@ -39,8 +49,8 @@ def get_users_report_summary(
         week_done = db.query(func.count(models.WeeklyPlan.id)).filter(models.WeeklyPlan.user_id == u.id).scalar() or 0
         week_total = 100
 
-        total = rep_total + goal_total + acc_total + pend_total + week_total
-        done = rep_done + goal_done + acc_done + pend_done + week_done
+        total = rep_weight_total + goal_total + acc_total + pend_total + week_total
+        done = rep_weight_done + goal_done + acc_done + pend_done + week_done
         pending = total - done
         progress_pct = round((done / total * 100), 1) if total > 0 else 0.0
         
@@ -61,11 +71,11 @@ def get_users_report_summary(
             "pendingReports": pending,
             "progressPct": progress_pct,
             "moduleBreakdown": {
-                "daily": {"done": rep_done, "total": rep_total, "pct": min(round(rep_done/rep_total*100, 1), 100.0) if rep_total>0 else 0.0},
-                "goals": {"done": goal_done, "total": goal_total, "pct": round(goal_done/goal_total*100, 1) if goal_total>0 else 0.0},
-                "acc": {"done": acc_done, "total": acc_total, "pct": round(acc_done/acc_total*100, 1) if acc_total>0 else 0.0},
-                "pending": {"done": pend_done, "total": pend_total, "pct": round(pend_done/pend_total*100, 1) if pend_total>0 else 0.0},
-                "weekly": {"done": week_done, "total": week_total, "pct": round(week_done/week_total*100, 1) if week_total>0 else 0.0},
+                "daily": {"done": rep_done, "total": rep_total, "pct": min(int(round(rep_done/rep_total*100)), 100) if rep_total>0 else 0},
+                "goals": {"done": goal_done, "total": goal_total, "pct": int(round(goal_done/goal_total*100)) if goal_total>0 else 0},
+                "acc": {"done": acc_done, "total": acc_total, "pct": int(round(acc_done/acc_total*100)) if acc_total>0 else 0},
+                "pending": {"done": pend_done, "total": pend_total, "pct": int(round(pend_done/pend_total*100)) if pend_total>0 else 0},
+                "weekly": {"done": week_done, "total": week_total, "pct": int(round(week_done/week_total*100)) if week_total>0 else 0},
             }
         })
         

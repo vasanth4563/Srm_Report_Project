@@ -483,6 +483,7 @@ Portal: ${window.location.origin}/login`;
         </Box>
       )
     },
+
     {
       field: 'actions', headerName: 'Actions', flex: 0.6, minWidth: 90, align: 'center', headerAlign: 'center',
       renderCell: (p) => (
@@ -692,7 +693,7 @@ Portal: ${window.location.origin}/login`;
                   {cat.label} Progress
                 </Typography>
                 <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 700, fontSize: 11 }}>
-                  Completion Status: completed
+                  Completion Status: {stats.done} of {stats.total} completed
                 </Typography>
               </Box>
             </Box>
@@ -752,7 +753,7 @@ Portal: ${window.location.origin}/login`;
     switch (selectedReportType) {
       case 'daily':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
             <Table size="small" sx={{ minWidth: 800 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
@@ -802,11 +803,11 @@ Portal: ${window.location.origin}/login`;
         );
       case 'reports':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
             <Table size="small" sx={{ minWidth: 800 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Area', 'Report Details', 'Date', 'Status'].map((h) => (
+                  {['Sl.No', 'Area', 'Date of Commencement', 'Planned Work Details', 'Status'].map((h) => (
                     <TableCell 
                       key={h} 
                       align={h === 'Status' ? 'center' : 'left'}
@@ -831,8 +832,8 @@ Portal: ${window.location.origin}/login`;
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Chip label={row.area} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '12px' }} />
                     </TableCell>
-                    <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.report}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date}</TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.report}</TableCell>
                     <TableCell align="center" sx={{ width: 120, minWidth: 120 }}>
                       <Chip
                         label={row.completed ? 'Completed' : 'Pending'}
@@ -852,11 +853,11 @@ Portal: ${window.location.origin}/login`;
         );
       case 'goals':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
             <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Date', 'Goal Details', 'Status'].map((h) => (
+                  {['Sl.No', 'Date of Commencement', 'Planned Work Details', 'Status'].map((h) => (
                     <TableCell 
                       key={h} 
                       align={h === 'Status' ? 'center' : 'left'}
@@ -899,11 +900,11 @@ Portal: ${window.location.origin}/login`;
         );
       case 'acc':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
             <Table size="small" sx={{ minWidth: 900 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Area', 'Work Completed', 'Start Date', 'End Date', 'Status'].map((h) => (
+                  {['Sl.No', 'Area', 'Date of Commencement', 'Planned Work Details', 'Date of Completion', 'Status'].map((h) => (
                     <TableCell 
                       key={h} 
                       align={h === 'Status' ? 'center' : 'left'}
@@ -928,8 +929,8 @@ Portal: ${window.location.origin}/login`;
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Chip label={row.area} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '12px' }} />
                     </TableCell>
-                    <TableCell sx={{ minWidth: 260, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{formatDateDMY(row.date_start)}</TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{formatDateDMY(row.date_end)}</TableCell>
                     <TableCell align="center" sx={{ width: 120, minWidth: 120 }}>
                       <Chip
@@ -950,11 +951,11 @@ Portal: ${window.location.origin}/login`;
         );
       case 'pending':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
             <Table size="small" sx={{ minWidth: 1000 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Areas', 'Particulars', 'Date of Commencement', 'Status as on', 'Remarks', 'Date of Completion'].map((h) => (
+                  {['Sl.No', 'Areas', 'Date of Commencement', 'Planned Work Details', 'Status', 'Remarks', 'Date of Completion'].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -966,9 +967,9 @@ Portal: ${window.location.origin}/login`;
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Chip label={row.areas} size="small" sx={{ fontSize: 12, fontWeight: 700, bgcolor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: '12px' }} />
                     </TableCell>
-                    <TableCell sx={{ minWidth: 220, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.particulars}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start ? formatDateDMY(row.date_start) : '—'}</TableCell>
-                    <TableCell sx={{ fontSize: 13.5, color: theme.palette.text.secondary }}>{row.status_date || '—'}</TableCell>
+                    <TableCell sx={{ minWidth: 220, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.particulars}</TableCell>
+                    <TableCell sx={{ fontSize: 13.5, color: theme.palette.text.secondary }}>{row.status || '—'}</TableCell>
                     <TableCell sx={{ fontSize: 13.5, color: theme.palette.text.secondary }}>{row.remarks || '—'}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_end ? formatDateDMY(row.date_end) : '—'}</TableCell>
                   </TableRow>
@@ -979,12 +980,12 @@ Portal: ${window.location.origin}/login`;
         );
       case 'weekly':
         return (
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '16px', overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
             <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead sx={{ bgcolor: headerBg }}>
                 <TableRow>
-                  {['Sl.No', 'Scheduled Week Range', 'Planned Work Details'].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13, color: headerTextColor, py: 1.5 }}>{h}</TableCell>
+                  {['Sl.No', 'Date of Commencement', 'Planned Work Details', 'Date of Completion'].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: 13.5, color: headerTextColor, py: 1.25 }}>{h}</TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -992,8 +993,9 @@ Portal: ${window.location.origin}/login`;
                 {dialogData.map((row, index) => (
                   <TableRow key={row.id || index} sx={{ '&:hover': { bgcolor: alpha('#10b981', 0.04) } }}>
                     <TableCell sx={{ fontWeight: 700, width: 60 }}>{index + 1}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{row.date ? formatDateDMY(row.date) : `${formatDateDMY(row.date_start)} → ${formatDateDMY(row.date_end)}`}</TableCell>
-                    <TableCell sx={{ minWidth: 280, fontSize: 13 }}>{row.work}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_start ? formatDateDMY(row.date_start) : (row.date ? formatDateDMY(row.date) : '—')}</TableCell>
+                    <TableCell sx={{ minWidth: 280, fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 700 }}>{row.date_end ? formatDateDMY(row.date_end) : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1529,11 +1531,71 @@ Portal: ${window.location.origin}/login`;
                   },
                 }}
               >
-                <Tab icon={<DescriptionRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Daily Reports" value="daily" />
-                <Tab icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="100 Days Goals" value="goals" />
-                <Tab icon={<VerifiedRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Accomplishments" value="acc" />
-                <Tab icon={<PendingActionsRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Pending Work" value="pending" />
-                <Tab icon={<TodayRoundedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Weekly Plans" value="weekly" />
+                <Tab
+                  icon={<DescriptionRoundedIcon sx={{ fontSize: 18, color: '#6366f1' }} />}
+                  iconPosition="start"
+                  label={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13.5 }}>Daily Reports</Typography>
+                      <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 700, mt: 0.25, color: '#6366f1' }}>
+                        {menuUser?.moduleBreakdown?.daily?.done ?? 0} of {menuUser?.moduleBreakdown?.daily?.total ?? 100} completed ({menuUser?.moduleBreakdown?.daily?.pct ?? 0}%)
+                      </Typography>
+                    </Box>
+                  }
+                  value="daily"
+                />
+                <Tab
+                  icon={<AutoAwesomeIcon sx={{ fontSize: 18, color: '#06b6d4' }} />}
+                  iconPosition="start"
+                  label={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13.5 }}>100 Days Goals</Typography>
+                      <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 700, mt: 0.25, color: '#06b6d4' }}>
+                        {menuUser?.moduleBreakdown?.goals?.done ?? 0} of {menuUser?.moduleBreakdown?.goals?.total ?? 100} completed ({menuUser?.moduleBreakdown?.goals?.pct ?? 0}%)
+                      </Typography>
+                    </Box>
+                  }
+                  value="goals"
+                />
+                <Tab
+                  icon={<VerifiedRoundedIcon sx={{ fontSize: 18, color: '#10b981' }} />}
+                  iconPosition="start"
+                  label={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13.5 }}>Accomplishments</Typography>
+                      <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 700, mt: 0.25, color: '#10b981' }}>
+                        {menuUser?.moduleBreakdown?.acc?.done ?? 0} of {menuUser?.moduleBreakdown?.acc?.total ?? 100} completed ({menuUser?.moduleBreakdown?.acc?.pct ?? 0}%)
+                      </Typography>
+                    </Box>
+                  }
+                  value="acc"
+                />
+                <Tab
+                  icon={<PendingActionsRoundedIcon sx={{ fontSize: 18, color: '#ef4444' }} />}
+                  iconPosition="start"
+                  label={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13.5 }}>Pending Work</Typography>
+                      <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 700, mt: 0.25, color: '#ef4444' }}>
+                        {menuUser?.moduleBreakdown?.pending?.done ?? 0} of {menuUser?.moduleBreakdown?.pending?.total ?? 100} completed ({menuUser?.moduleBreakdown?.pending?.pct ?? 0}%)
+                      </Typography>
+                    </Box>
+                  }
+                  value="pending"
+                />
+                <Tab
+                  icon={<TodayRoundedIcon sx={{ fontSize: 18, color: '#8b5cf6' }} />}
+                  iconPosition="start"
+                  label={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13.5 }}>Weekly Plans</Typography>
+                      <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 700, mt: 0.25, color: '#8b5cf6' }}>
+                        {menuUser?.moduleBreakdown?.weekly?.done ?? 0} of {menuUser?.moduleBreakdown?.weekly?.total ?? 100} completed ({menuUser?.moduleBreakdown?.weekly?.pct ?? 0}%)
+                      </Typography>
+                    </Box>
+                  }
+                  value="weekly"
+                />
               </Tabs>
             </DialogTitle>
             <DialogContent dividers sx={{ p: 3 }}>

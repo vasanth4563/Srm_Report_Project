@@ -35,6 +35,7 @@ import { apiRequest } from '../utils/api.ts';
 type ReportRow = {
   id: number; slNo: number; date: string;
   area: string; report: string; completed: boolean;
+  edited_once?: boolean;
 };
 
 type GoalRow = {
@@ -60,7 +61,7 @@ type PendingRow = {
   responsiblePerson: string;
   dateStart: string;
   dateEnd: string;
-  statusDate: string;
+  status: string;
   remarks: string;
   completed: boolean;
 };
@@ -104,7 +105,7 @@ const getReportDateBounds = () => {
 const initialForm = { date: '', area: '', report: '' };
 const blankGoal = { day: '', date: '', goal: '', responsiblePerson: '' };
 const blankAcc = { area: '', work: '', dateStart: '', dateEnd: '' };
-const blankPending = { areas: '', particulars: '', responsiblePerson: '', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' };
+const blankPending = { areas: '', particulars: '', responsiblePerson: '', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' };
 const blankWeekly = { date: '', dateEnd: '', work: '', responsiblePerson: '' };
 
 // ─── Flag Cell ───────────────────────────────────────────────────────────────
@@ -155,16 +156,24 @@ const toYYYYMMDD = (dateStr: string): string => {
 
 const isPastEditDeadline = (reportDateStr: string): boolean => {
   if (!reportDateStr) return false;
-  const reportDate = new Date(reportDateStr);
-  if (isNaN(reportDate.getTime())) return false;
   
-  // Set to next day at 18:00:00 (6:00 PM) local time
-  const deadlineDate = new Date(reportDate);
-  deadlineDate.setDate(deadlineDate.getDate() + 1);
-  deadlineDate.setHours(18, 0, 0, 0); // 6:00 PM next day
+  const reportParts = reportDateStr.split('-');
+  if (reportParts.length !== 3) return false;
   
-  const now = new Date();
-  return now > deadlineDate;
+  const reportYear = parseInt(reportParts[0], 10);
+  const reportMonth = parseInt(reportParts[1], 10) - 1;
+  const reportDay = parseInt(reportParts[2], 10);
+  
+  const rDate = new Date(reportYear, reportMonth, reportDay);
+  rDate.setHours(0, 0, 0, 0);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  return rDate.getTime() < yesterday.getTime();
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -238,12 +247,11 @@ const DailyReportPage: React.FC = () => {
 
   type GoalGridRow = { id?: number; day: string; date: string; dateEnd: string; goal: string };
   const [goalGrid, setGoalGrid] = useState<GoalGridRow[]>(() => {
-    const today = getReportDateBounds().todayStr;
     return [
-      { day: '1', date: today, dateEnd: today, goal: '' },
-      { day: '2', date: addDaysToDate(today, 1), dateEnd: addDaysToDate(today, 1), goal: '' },
-      { day: '3', date: addDaysToDate(today, 2), dateEnd: addDaysToDate(today, 2), goal: '' },
-      { day: '4', date: addDaysToDate(today, 3), dateEnd: addDaysToDate(today, 3), goal: '' },
+      { day: '1', date: '', dateEnd: '', goal: '' },
+      { day: '2', date: '', dateEnd: '', goal: '' },
+      { day: '3', date: '', dateEnd: '', goal: '' },
+      { day: '4', date: '', dateEnd: '', goal: '' },
     ];
   });
 
@@ -256,13 +264,9 @@ const DailyReportPage: React.FC = () => {
       goal: g.goal,
     }));
 
-    const today = getReportDateBounds().todayStr;
-    let lastDate = grid.length > 0 ? grid[grid.length - 1].date : today;
-
     while (grid.length < 4) {
       const nextDay = grid.length + 1;
-      lastDate = grid.length > 0 ? addDaysToDate(lastDate, 1) : today;
-      grid.push({ day: String(nextDay), date: lastDate, dateEnd: lastDate, goal: '' });
+      grid.push({ day: String(nextDay), date: '', dateEnd: '', goal: '' });
     }
 
     setGoalGrid(grid);
@@ -379,9 +383,10 @@ const DailyReportPage: React.FC = () => {
     rowId: '' as string | number,
     dateStart: '',
     dateEnd: '',
-    statusDate: '',
+    status: '',
     work: ''
   });
+
 
 
   // Tab 4 Edit Dialog State
@@ -416,17 +421,17 @@ const DailyReportPage: React.FC = () => {
     responsiblePerson: string;
     dateStart: string;
     dateEnd: string;
-    statusDate: string;
+    status: string;
     completed: boolean;
     remarks: string;
   };
 
   const [pendingGrid, setPendingGrid] = useState<PendingGridRow[]>(() => {
     return [
-      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
-      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
-      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
-      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' }
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' }
     ];
   });
 
@@ -438,13 +443,13 @@ const DailyReportPage: React.FC = () => {
       responsiblePerson: p.responsiblePerson || 'Self',
       dateStart: p.dateStart,
       dateEnd: p.dateEnd || '',
-      statusDate: p.statusDate || '',
+      status: p.status || '',
       completed: p.completed,
       remarks: p.remarks || '',
     }));
 
     while (grid.length < 4) {
-      grid.push({ areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' });
+      grid.push({ areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' });
     }
 
     setPendingGrid(grid);
@@ -453,8 +458,8 @@ const DailyReportPage: React.FC = () => {
   const handleAddPendingRows = () => {
     setPendingGrid((prev) => [
       ...prev,
-      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' },
-      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', statusDate: '', completed: false, remarks: '' }
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' },
+      { areas: '', particulars: '', responsiblePerson: 'Self', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' }
     ]);
   };
 
@@ -520,23 +525,11 @@ const DailyReportPage: React.FC = () => {
   };
 
   const handleAddWeeklyRows = () => {
-    const todayStr = getReportDateBounds().todayStr;
-    setWeeklyGrid((prev) => {
-      const lastRow = prev[prev.length - 1];
-      const lastEnd = lastRow?.dateEnd || (lastRow?.date ? addDaysToDate(lastRow.date, 6) : todayStr);
-
-      const week1Start = addDaysToDate(lastEnd, 1);
-      const week1End = addDaysToDate(week1Start, 6);
-
-      const week2Start = addDaysToDate(week1End, 1);
-      const week2End = addDaysToDate(week2Start, 6);
-
-      return [
-        ...prev,
-        { date: week1Start, dateEnd: week1End, work: '' },
-        { date: week2Start, dateEnd: week2End, work: '' }
-      ];
-    });
+    setWeeklyGrid((prev) => [
+      ...prev,
+      { date: '', dateEnd: '', work: '' },
+      { date: '', dateEnd: '', work: '' }
+    ]);
   };
 
   const handlePrepareNextWeek = () => {
@@ -580,6 +573,7 @@ const DailyReportPage: React.FC = () => {
         area: r.area,
         report: r.report,
         completed: r.completed ?? true,
+        edited_once: r.edited_once ?? false,
       }));
       setRows(mapped);
       syncGridWithReports(mapped, form.date || getReportDateBounds().todayStr);
@@ -684,7 +678,7 @@ const DailyReportPage: React.FC = () => {
         responsiblePerson: p.responsible_person || '',
         dateStart: p.date_start,
         dateEnd: p.date_end || '',
-        statusDate: p.status_date || '',
+        status: p.status || '',
         remarks: p.remarks || '',
         completed: p.completed ?? true,
       }));
@@ -786,14 +780,19 @@ const DailyReportPage: React.FC = () => {
       setSnack({ open: true, msg: 'Please enter goal details in at least one row before submitting.', severity: 'warning' });
       return;
     }
+    const hasMissingDate = newEntries.some((row) => !row.date);
+    if (hasMissingDate) {
+      setSnack({ open: true, msg: 'Please select Date of Commencement for all rows being submitted.', severity: 'warning' });
+      return;
+    }
     try {
       for (const item of newEntries) {
         await apiRequest('/api/goals', {
           method: 'POST',
           bodyData: {
             day: Number(item.day || 1),
-            date: item.date || getReportDateBounds().todayStr,
-            date_end: item.dateEnd || item.date || getReportDateBounds().todayStr,
+            date: item.date,
+            date_end: item.dateEnd || item.date,
             goal: item.goal.trim(),
             responsible_person: 'Self',
             completed: true,
@@ -808,16 +807,11 @@ const DailyReportPage: React.FC = () => {
   };
 
   const handleAddGoalRows = () => {
-    setGoalGrid((prev) => {
-      const lastDate = prev.length > 0 && prev[prev.length - 1].date ? prev[prev.length - 1].date : getReportDateBounds().todayStr;
-      const d1 = addDaysToDate(lastDate, 1);
-      const d2 = addDaysToDate(lastDate, 2);
-      return [
-        ...prev,
-        { day: String(prev.length + 1), date: d1, dateEnd: d1, goal: '' },
-        { day: String(prev.length + 2), date: d2, dateEnd: d2, goal: '' },
-      ];
-    });
+    setGoalGrid((prev) => [
+      ...prev,
+      { day: String(prev.length + 1), date: '', dateEnd: '', goal: '' },
+      { day: String(prev.length + 2), date: '', dateEnd: '', goal: '' },
+    ]);
   };
 
   const handleAddGoal = async () => {
@@ -965,7 +959,7 @@ const DailyReportPage: React.FC = () => {
             responsible_person: row.responsiblePerson || 'Self',
             date_start: row.dateStart,
             date_end: row.dateEnd || null,
-            status_date: row.statusDate || null,
+            status: row.status || null,
             remarks: row.remarks || '',
             completed: row.completed
           }
@@ -989,7 +983,7 @@ const DailyReportPage: React.FC = () => {
             responsible_person: editPendingDialogForm.responsiblePerson,
             date_start: editPendingDialogForm.dateStart,
             date_end: editPendingDialogForm.dateEnd || null,
-            status_date: editPendingDialogForm.statusDate || null,
+            status: editPendingDialogForm.status || null,
             remarks: editPendingDialogForm.remarks,
             completed: editPendingDialogForm.completed
           }
@@ -1017,7 +1011,7 @@ const DailyReportPage: React.FC = () => {
             responsible_person: row.responsiblePerson || 'Self',
             date_start: editPendingDateDialog.dateStart,
             date_end: editPendingDateDialog.dateEnd || null,
-            status_date: editPendingDateDialog.statusDate || null,
+            status: row.status || null,
             remarks: row.remarks,
             completed: row.completed
           }
@@ -1030,7 +1024,7 @@ const DailyReportPage: React.FC = () => {
         setEditedDates(updatedEdited);
         localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
 
-        setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' });
+        setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', status: '', work: '' });
         setSnack({ open: true, msg: 'Dates updated successfully!', severity: 'success' });
         fetchPending();
       } catch (err: any) {
@@ -1038,6 +1032,8 @@ const DailyReportPage: React.FC = () => {
       }
     }
   };
+
+
 
 
 
@@ -1502,7 +1498,7 @@ const DailyReportPage: React.FC = () => {
                           Submit Report
                         </Button>
                         <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
-                          + Add 2 Rows
+                          + Add Rows
                         </Button>
                         <Button variant="outlined" startIcon={<EditRoundedIcon />} onClick={() => { setEditReportDialogOpen(true); setEditReportDialogId(''); setEditReportDialogForm(initialForm); setDirectEditAllowed(true); }} sx={{ px: 3 }}>
                           Edit Data
@@ -1716,7 +1712,7 @@ const DailyReportPage: React.FC = () => {
                           Submit Goals
                         </Button>
                         <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddGoalRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
-                          + Add 2 Rows
+                          + Add Rows
                         </Button>
                       </Box>
                     </CardContent>
@@ -1745,8 +1741,8 @@ const DailyReportPage: React.FC = () => {
                       <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
                         <colgroup>
                           <col style={{ width: '60px' }} />
-                          <col style={{ width: '45%' }} />
                           <col style={{ width: '25%' }} />
+                          <col style={{ width: '50%' }} />
                           <col style={{ width: '25%' }} />
                         </colgroup>
                         <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
@@ -1754,11 +1750,11 @@ const DailyReportPage: React.FC = () => {
                             <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>
                               Sl. No.
                             </TableCell>
-                            <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>
-                              Planned Work Details
-                            </TableCell>
                             <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5, textAlign: 'center' }}>
                               Date of Commencement
+                            </TableCell>
+                            <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>
+                              Planned Work Details
                             </TableCell>
                             <TableCell sx={{ color: '#fff', fontWeight: 800, py: 1.25, fontSize: 13.5, textAlign: 'center' }}>
                               Date of Completion
@@ -1782,9 +1778,6 @@ const DailyReportPage: React.FC = () => {
                                   <TableRow key={row.id || globalIdx} sx={{ bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc') : (globalIdx % 2 === 0 ? 'transparent' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'), '&:hover': { background: alpha('#107c41', 0.04) }, borderBottom: `1px solid ${theme.palette.divider}` }}>
                                     <TableCell sx={{ fontWeight: 800, textAlign: 'center', bgcolor: row.id ? (theme.palette.mode === 'dark' ? '#1e293b' : '#e2e8f0') : (theme.palette.mode === 'dark' ? '#0f172a' : '#f1f5f9'), color: theme.palette.text.secondary, borderRight: '1px solid #cbd5e1', fontSize: 13, verticalAlign: 'middle', py: 1, px: 1.5 }}>
                                       {String(globalIdx + 1).padStart(2, '0')}
-                                    </TableCell>
-                                    <TableCell sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', py: 1, px: 1.5, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle' }}>
-                                      <Typography variant="body2" sx={{ fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</Typography>
                                     </TableCell>
                                     <TableCell sx={{ whiteSpace: 'nowrap', py: 1, px: 1.5, textAlign: 'center', borderRight: '1px solid #cbd5e1', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
                                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
@@ -1810,6 +1803,9 @@ const DailyReportPage: React.FC = () => {
                                           </Tooltip>
                                         )}
                                       </Box>
+                                    </TableCell>
+                                    <TableCell sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', py: 1, px: 1.5, borderRight: '1px solid #cbd5e1', verticalAlign: 'middle' }}>
+                                      <Typography variant="body2" sx={{ fontSize: 14.5, fontWeight: 600, color: theme.palette.text.primary, lineHeight: 1.5 }}>{row.work}</Typography>
                                     </TableCell>
                                     <TableCell sx={{ whiteSpace: 'nowrap', py: 1, px: 1.5, textAlign: 'center', verticalAlign: 'middle', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
                                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
@@ -1909,7 +1905,7 @@ const DailyReportPage: React.FC = () => {
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Areas</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Particulars</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Date of Commencement</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Status as on</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Status</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '180px', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Remarks</TableCell>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: '150px', py: 1.25, fontSize: 13.5 }}>Date of Completion</TableCell>
                             </TableRow>
@@ -1959,7 +1955,7 @@ const DailyReportPage: React.FC = () => {
                                                 rowId: row.id as number,
                                                 dateStart: row.dateStart,
                                                 dateEnd: row.dateEnd || '',
-                                                statusDate: row.statusDate || '',
+                                                status: row.status || '',
                                                 work: row.particulars
                                               });
                                             }}
@@ -1983,42 +1979,41 @@ const DailyReportPage: React.FC = () => {
                                 </TableCell>
 
                                 {/* 2. Status as on */}
-                                <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
-                                  {row.id ? (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, py: 1, px: 0.5 }}>
-                                      <Typography variant="body2" sx={{ fontSize: 13, fontWeight: 700, color: theme.palette.text.primary }}>
-                                        {row.statusDate || '—'}
-                                      </Typography>
-                                      {!editedDates.pending?.includes(row.id as number) && (
-                                        <Tooltip title="Edit Status as on">
-                                          <IconButton size="small"
-                                            onClick={() => {
-                                              setEditPendingDateDialog({
-                                                open: true,
-                                                rowId: row.id as number,
-                                                dateStart: row.dateStart,
-                                                dateEnd: row.dateEnd || '',
-                                                statusDate: row.statusDate || '',
-                                                work: row.particulars
-                                              });
-                                            }}
-                                            sx={{ color: '#107c41', p: 0.3, background: alpha('#107c41', 0.08), '&:hover': { background: alpha('#107c41', 0.2) } }}
-                                          >
-                                            <EditRoundedIcon sx={{ fontSize: 13 }} />
-                                          </IconButton>
-                                        </Tooltip>
-                                      )}
-                                    </Box>
-                                  ) : (
-                                    <Box component="textarea" rows={2} value={row.statusDate}
-                                      onChange={(e: any) => {
-                                        const updated = [...pendingGrid];
-                                        updated[idx].statusDate = e.target.value;
-                                        setPendingGrid(updated);
-                                      }}
-                                      sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: theme.palette.text.primary, boxSizing: 'border-box' }}
-                                    />
-                                  )}
+                                 <TableCell sx={{ p: 0, borderRight: '1px solid #cbd5e1', verticalAlign: 'top', bgcolor: row.id ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') : 'transparent' }}>
+                                   <Box component="textarea" rows={2} value={row.status}
+                                    autoComplete="off"
+                                    name="status_text"
+                                    onChange={(e: any) => {
+                                      const updated = [...pendingGrid];
+                                      updated[idx].status = e.target.value;
+                                      setPendingGrid(updated);
+                                    }}
+                                    onBlur={async () => {
+                                      if (row.id) {
+                                        try {
+                                          await apiRequest(`/api/pending/${row.id}`, {
+                                            method: 'PUT',
+                                            bodyData: {
+                                              areas: row.areas,
+                                              particulars: row.particulars,
+                                              responsible_person: row.responsiblePerson || 'Self',
+                                              date_start: row.dateStart,
+                                              date_end: row.dateEnd || null,
+                                              status: row.status || null,
+                                              remarks: row.remarks,
+                                              completed: row.completed
+                                            }
+                                          });
+                                          setSnack({ open: true, msg: 'Status updated successfully!', severity: 'success' });
+                                          fetchPending();
+                                        } catch (err: any) {
+                                          setSnack({ open: true, msg: err.message || 'Failed to save status', severity: 'error' });
+                                          fetchPending();
+                                        }
+                                      }
+                                    }}
+                                    sx={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', resize: 'vertical', minHeight: 46, px: 1.5, py: 1, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', color: row.id ? theme.palette.text.secondary : theme.palette.text.primary, boxSizing: 'border-box' }}
+                                  />
                                 </TableCell>
 
                                 {/* 3. Remarks */}
@@ -2049,7 +2044,7 @@ const DailyReportPage: React.FC = () => {
                                                 rowId: row.id as number,
                                                 dateStart: row.dateStart,
                                                 dateEnd: row.dateEnd || '',
-                                                statusDate: row.statusDate || '',
+                                                status: row.status || '',
                                                 work: row.particulars
                                               });
                                             }}
@@ -2082,7 +2077,7 @@ const DailyReportPage: React.FC = () => {
                           Submit Pending & Priority Work
                         </Button>
                         <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddPendingRows} sx={{ px: 3, color: '#107c41', borderColor: '#107c41', '&:hover': { borderColor: '#0e6b37', background: 'rgba(16,124,65,0.04)' } }}>
-                          + Add 2 Rows
+                          + Add Rows
                         </Button>
                       </Box>
                     </CardContent>
@@ -2256,7 +2251,7 @@ const DailyReportPage: React.FC = () => {
                           Submit Weekly Plan
                         </Button>
                         <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={handleAddWeeklyRows} sx={{ px: 2.5, color: '#107c41', borderColor: '#107c41', fontWeight: 700, '&:hover': { borderColor: '#0e6b37', bgcolor: 'rgba(16,124,65,0.08)' } }}>
-                          + Add 2 Rows
+                          + Add Rows
                         </Button>
                       </Box>
                     </CardContent>
@@ -2285,7 +2280,7 @@ const DailyReportPage: React.FC = () => {
                 setEditReportDialogId(id);
                 const row = rows.find(r => r.id === id);
                 if (row) {
-                  if (user?.role === 'admin' || user?.role === 'chairman' || !isPastEditDeadline(row.date)) {
+                  if (user?.role === 'admin' || user?.role === 'chairman' || (!isPastEditDeadline(row.date) && !row.edited_once)) {
                     setEditReportDialogForm({ date: row.date, area: row.area, report: row.report });
                     setDirectEditAllowed(true);
                   } else {
@@ -2298,17 +2293,21 @@ const DailyReportPage: React.FC = () => {
                 }
               }}
             >
-              {rows.map((row) => (
-                <MenuItem key={row.id} value={row.id}>
-                  Sl. {String(row.slNo).padStart(2, '0')} - {row.area} ({new Date(row.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
-                </MenuItem>
-              ))}
+              {rows
+                .filter((row) => user?.role === 'admin' || user?.role === 'chairman' || !isPastEditDeadline(row.date))
+                .map((row) => (
+                  <MenuItem key={row.id} value={row.id}>
+                    Sl. {String(row.slNo).padStart(2, '0')} - {row.area} ({new Date(row.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
 
           {editReportDialogId !== '' && !directEditAllowed && (
             <Alert severity="warning" sx={{ mb: 1, borderRadius: '8px' }}>
-              ⏰ Edit window has closed (next day 6:00 PM passed). Request Admin approval to edit this report.
+              {rows.find(r => r.id === editReportDialogId)?.edited_once 
+                ? "🔒 This report has already been edited once. Request Admin approval to edit it again." 
+                : "⏰ Edit window has closed. You can only edit daily reports for today and yesterday. Request Admin approval to edit this report."}
             </Alert>
           )}
 
@@ -2442,7 +2441,7 @@ const DailyReportPage: React.FC = () => {
                 setEditPendingDialogId(id);
                 const row = pendingEntries.find(r => r.id === id);
                 if (row) {
-                  setEditPendingDialogForm({ areas: row.areas, particulars: row.particulars, responsiblePerson: row.responsiblePerson || 'Self', dateStart: row.dateStart, dateEnd: row.dateEnd, statusDate: row.statusDate || '', remarks: row.remarks });
+                  setEditPendingDialogForm({ areas: row.areas, particulars: row.particulars, responsiblePerson: row.responsiblePerson || 'Self', dateStart: row.dateStart, dateEnd: row.dateEnd, status: row.status || '', remarks: row.remarks });
                 }
               }}
             >
@@ -2462,7 +2461,7 @@ const DailyReportPage: React.FC = () => {
                 <Grid item xs={12} sm={6}><TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
                 <Grid item xs={12} sm={6}><TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
               </Grid>
-              <TextField label="Status as on" fullWidth value={editPendingDialogForm.statusDate} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, statusDate: e.target.value }))} />
+              <TextField label="Status" fullWidth inputProps={{ autoComplete: 'off', name: 'status_text' }} value={editPendingDialogForm.status} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, status: e.target.value }))} />
               <TextField label="Remarks" fullWidth value={editPendingDialogForm.remarks} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, remarks: e.target.value }))} />
             </>
           )}
@@ -2600,7 +2599,7 @@ const DailyReportPage: React.FC = () => {
       </Dialog>
 
       {/* Tab 3: Edit Pending Dates Dialog */}
-      <Dialog open={editPendingDateDialog.open} onClose={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' })} maxWidth="sm" fullWidth>
+      <Dialog open={editPendingDateDialog.open} onClose={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', status: '', work: '' })} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
           <CalendarMonthRoundedIcon sx={{ color: '#107c41' }} />
           Edit Pending Work Dates
@@ -2637,15 +2636,9 @@ const DailyReportPage: React.FC = () => {
               />
             </Grid>
           </Grid>
-          <TextField
-            fullWidth
-            label="Status as on"
-            value={editPendingDateDialog.statusDate}
-            onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, statusDate: e.target.value }))}
-          />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', statusDate: '', work: '' })} color="inherit">
+          <Button onClick={() => setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', status: '', work: '' })} color="inherit">
             Cancel
           </Button>
           <Button
@@ -2657,6 +2650,8 @@ const DailyReportPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+
 
       {/* User Request Edit Access Dialog */}
       <Dialog open={requestAccessDialogOpen} onClose={() => setRequestAccessDialogOpen(false)} maxWidth="xs" fullWidth>

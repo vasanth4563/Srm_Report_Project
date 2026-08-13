@@ -71,6 +71,7 @@ class DailyReportBase(BaseModel):
     area: str
     report: str
     completed: Optional[bool] = True
+    edited_once: Optional[bool] = False
 
 class DailyReportCreate(DailyReportBase):
     pass
@@ -125,7 +126,7 @@ class PendingWorkBase(BaseModel):
     responsible_person: Optional[str] = None
     date_start: date
     date_end: Optional[date] = None
-    status_date: Optional[str] = None
+    status: Optional[str] = None
     remarks: Optional[str] = None
     completed: Optional[bool] = False
 

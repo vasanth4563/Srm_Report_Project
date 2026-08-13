@@ -23,7 +23,9 @@ def get_reports(
     # Admins and Chairman can query other users' reports
     if current_user.role in ["admin", "chairman"]:
         if user_id:
-            return db.query(models.DailyReport).filter(models.DailyReport.user_id == user_id).all()
+            return db.query(models.DailyReport).filter(
+                models.DailyReport.user_id == user_id
+            ).all()
         return db.query(models.DailyReport).all()
     
     # Standard users can only access their own reports
@@ -49,6 +51,43 @@ def create_report(
     db.refresh(new_report)
     return new_report
 
+def verify_edit_permission(report, db, user):
+    if user.role in ["admin", "chairman"]:
+        return
+        
+    import datetime
+    now = datetime.datetime.utcnow()
+    approved_req = db.query(models.EditRequest).filter(
+        models.EditRequest.user_id == user.id,
+        models.EditRequest.module == "reports",
+        models.EditRequest.item_id == report.id,
+        models.EditRequest.status == "approved",
+        models.EditRequest.expires_at > now
+    ).first() is not None
+    
+    if approved_req:
+        return
+        
+    if report.edited_once:
+        raise HTTPException(
+            status_code=403,
+            detail="This report has already been edited once. Please request Admin approval to edit this report again."
+        )
+        
+    ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    today = ist_now.date()
+    yesterday = today - datetime.timedelta(days=1)
+    
+    report_date = report.date
+    if isinstance(report_date, datetime.datetime):
+        report_date = report_date.date()
+        
+    if report_date not in (today, yesterday):
+        raise HTTPException(
+            status_code=403,
+            detail="Edit window has closed. You can only edit reports for today and yesterday. Please request Admin approval to edit this report."
+        )
+
 @router.put("/{id}", response_model=schemas.DailyReportResponse)
 def update_report(
     id: int,
@@ -63,12 +102,17 @@ def update_report(
     # Check permissions
     if current_user.role != "admin" and report.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to edit this report")
+        
+    verify_edit_permission(report, db, current_user)
     
     report.date = report_data.date
     report.area = report_data.area
     report.report = report_data.report
     report.completed = report_data.completed
     
+    if current_user.role not in ["admin", "chairman"]:
+        report.edited_once = True
+        
     db.commit()
     db.refresh(report)
     return report
@@ -85,6 +129,8 @@ def toggle_report_status(
     
     if current_user.role != "admin" and report.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this report")
+        
+    verify_edit_permission(report, db, current_user)
     
     report.completed = True
     db.commit()
@@ -103,6 +149,8 @@ def delete_report(
     
     if current_user.role != "admin" and report.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this report")
+        
+    verify_edit_permission(report, db, current_user)
     
     db.delete(report)
     db.commit()

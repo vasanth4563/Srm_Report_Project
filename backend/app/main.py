@@ -19,21 +19,69 @@ def run_date_end_migration():
     finally:
         db.close()
 
+def run_status_column_migration():
+    db = SessionLocal()
+    try:
+        db.execute(text("ALTER TABLE pending_works CHANGE COLUMN status_date status VARCHAR(255) NULL"))
+        db.commit()
+        print("[MIGRATION] Successfully renamed status_date to status in pending_works")
+    except Exception as e:
+        db.rollback()
+        print(f"[MIGRATION INFO] Could not rename status_date to status: {e}")
+        try:
+            db.execute(text("ALTER TABLE pending_works ADD COLUMN status VARCHAR(255) NULL"))
+            db.commit()
+            print("[MIGRATION] Successfully added status column to pending_works")
+        except Exception as e2:
+            db.rollback()
+            print(f"[MIGRATION INFO] Could not add status column: {e2}")
+    finally:
+        db.close()
+
+def run_edited_once_migration():
+    db = SessionLocal()
+    try:
+        db.execute(text("ALTER TABLE daily_reports ADD COLUMN edited_once TINYINT(1) DEFAULT 0"))
+        db.commit()
+        with open(r"c:\Users\vasan\OneDrive\Desktop\Report\backend\migration_error.log", "w") as f:
+            f.write("Migration success!")
+        print("[MIGRATION] Successfully added edited_once to daily_reports")
+    except Exception as e:
+        db.rollback()
+        with open(r"c:\Users\vasan\OneDrive\Desktop\Report\backend\migration_error.log", "w") as f:
+            f.write(f"Migration error: {e}")
+        print(f"[MIGRATION INFO] Could not add edited_once to daily_reports: {e}")
+    finally:
+        db.close()
+
 from sqlalchemy import text
 run_date_end_migration()
+run_status_column_migration()
+run_edited_once_migration()
 
 def copy_logo_file():
     import shutil
     import os
-    src = r"C:\Users\vasan\.gemini\antigravity\brain\bb7d008d-2bb3-4c53-a1d3-6c900d55fe53\.user_uploaded\media__1785990847082.jpg"
-    dest = r"c:\Users\vasan\OneDrive\Desktop\Report\public\srm_logo.jpg"
-    if os.path.exists(src):
+    src_logo = r"C:\Users\vasan\.gemini\antigravity\brain\bb7d008d-2bb3-4c53-a1d3-6c900d55fe53\.user_uploaded\media_1786541435349.jpg"
+    dest_logo = r"c:\Users\vasan\OneDrive\Desktop\Report\public\srm_logo.jpg"
+    src_icon = r"C:\Users\vasan\.gemini\antigravity\brain\bb7d008d-2bb3-4c53-a1d3-6c900d55fe53\.user_uploaded\media_1786541405088.png"
+    dest_icon = r"c:\Users\vasan\OneDrive\Desktop\Report\public\srm_icon.png"
+    
+    if os.path.exists(src_logo):
         try:
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.copy(src, dest)
+            os.makedirs(os.path.dirname(dest_logo), exist_ok=True)
+            shutil.copy(src_logo, dest_logo)
             print("[LOGO COPY] Successfully copied logo to public/srm_logo.jpg")
         except Exception as e:
             print(f"[LOGO COPY ERROR] {e}")
+            
+    if os.path.exists(src_icon):
+        try:
+            os.makedirs(os.path.dirname(dest_icon), exist_ok=True)
+            shutil.copy(src_icon, dest_icon)
+            print("[LOGO COPY] Successfully copied icon to public/srm_icon.png")
+        except Exception as e:
+            print(f"[ICON COPY ERROR] {e}")
 
 copy_logo_file()
 
