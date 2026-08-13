@@ -35,10 +35,16 @@ export const getTheme = (mode: 'light' | 'dark') =>
     },
     typography: {
       fontFamily: '"Inter", "Segoe UI", sans-serif',
-      h4: { fontWeight: 700 },
-      h5: { fontWeight: 700 },
-      h6: { fontWeight: 600 },
-      subtitle1: { fontWeight: 500 },
+      fontSize: 16,
+      h4: { fontWeight: 700, fontSize: '1.65rem' },
+      h5: { fontWeight: 700, fontSize: '1.45rem' },
+      h6: { fontWeight: 600, fontSize: '1.25rem' },
+      subtitle1: { fontWeight: 500, fontSize: '1.1rem' },
+      subtitle2: { fontSize: '1rem' },
+      body1: { fontSize: '1.05rem', lineHeight: 1.6 },
+      body2: { fontSize: '0.95rem', lineHeight: 1.5 },
+      button: { fontSize: '0.95rem' },
+      caption: { fontSize: '0.85rem' }
     },
     shape: { borderRadius: 12 },
     components: {

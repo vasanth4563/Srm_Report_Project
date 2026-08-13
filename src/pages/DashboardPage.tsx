@@ -434,9 +434,6 @@ Portal: ${window.location.origin}/login`;
               }}>
                 {val}%
               </Typography>
-              <Typography variant="caption" sx={{ fontSize: 10, color: theme.palette.text.secondary }}>
-                {p.row.doneReports}/{p.row.totalReports}
-              </Typography>
             </Box>
             <LinearProgress
               variant="determinate"
@@ -459,30 +456,7 @@ Portal: ${window.location.origin}/login`;
         );
       }
     },
-    {
-      field: 'totalReports', headerName: 'Total', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
-      renderCell: (p) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography>
-        </Box>
-      )
-    },
-    {
-      field: 'doneReports', headerName: 'Completed', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
-      renderCell: (p) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
-          <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 700, fontSize: 11 }} />
-        </Box>
-      )
-    },
-    {
-      field: 'pendingReports', headerName: 'Pending', flex: 0.4, minWidth: 60, align: 'center', headerAlign: 'center',
-      renderCell: (p) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
-          <Chip label={p.value} size="small" sx={{ bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 700, fontSize: 11 }} />
-        </Box>
-      )
-    },
+
 
     {
       field: 'actions', headerName: 'Actions', flex: 0.6, minWidth: 90, align: 'center', headerAlign: 'center',
@@ -502,11 +476,8 @@ Portal: ${window.location.origin}/login`;
   ];
 
   const columnsToRender = useMemo(() => {
-    if (user?.role === 'chairman') {
-      return userColumns.filter(col => col.field !== 'progressPct');
-    }
     return userColumns;
-  }, [user, userColumns]);
+  }, [userColumns]);
 
   const gridSx = {
     border: 'none',
@@ -1411,7 +1382,7 @@ Portal: ${window.location.origin}/login`;
                   </Box>
                 </Box>
                 <Box sx={{ borderRadius: '0 0 20px 20px' }}>
-                  <Box sx={{ width: '100%' }}>
+                  <Box sx={{ width: '100%', overflowX: 'auto', maxWidth: '100%' }}>
                     {loadingUsers ? (
                       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
                         <CircularProgress sx={{ color: user?.role === 'chairman' ? '#f59e0b' : '#6366f1' }} />
@@ -1498,12 +1469,26 @@ Portal: ${window.location.origin}/login`;
             fullWidth
           >
             <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0, pt: 2.5, px: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: { xs: 'column-reverse', sm: 'row' }, 
+                alignItems: { xs: 'flex-start', sm: 'center' }, 
+                justifyContent: 'space-between', 
+                gap: 2, 
+                mb: 1.5 
+              }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <PeopleAltRoundedIcon sx={{ color: '#4c248b', fontSize: 26 }} />
-                  <Typography variant="h5" sx={{ fontWeight: 800, color: theme.palette.text.primary, fontSize: { xs: 15, sm: 19 } }}>
-                    {menuUser ? `${menuUser.title || ''} ${menuUser.name} (${menuUser.designation})` : 'User Performance Summary'}
-                  </Typography>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 800, color: theme.palette.text.primary, fontSize: { xs: 15, sm: 19 } }}>
+                      {menuUser ? `${menuUser.title || ''} ${menuUser.name} (${menuUser.designation})` : 'User Performance Summary'}
+                    </Typography>
+                    {menuUser && (
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#f59e0b', fontSize: 13, mt: 0.25 }}>
+                        Overall Progress: {menuUser.progressPct}% ({menuUser.doneReports} of {menuUser.totalReports} points)
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
                 {menuUser && renderMiniProgressChart(menuUser)}
               </Box>
@@ -1598,7 +1583,7 @@ Portal: ${window.location.origin}/login`;
                 />
               </Tabs>
             </DialogTitle>
-            <DialogContent dividers sx={{ p: 3 }}>
+            <DialogContent dividers sx={{ p: { xs: 1.5, sm: 3 } }}>
               {renderDialogContent()}
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 1.5 }}>

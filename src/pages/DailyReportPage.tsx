@@ -1405,8 +1405,8 @@ const DailyReportPage: React.FC = () => {
                         </Typography>
                       </Box>
 
-                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
-                        <Table size="small">
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflowX: 'auto', mb: 2.5 }}>
+                        <Table size="small" sx={{ minWidth: 800 }}>
                           <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
                             <TableRow>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Sl. No.</TableCell>
@@ -1560,8 +1560,8 @@ const DailyReportPage: React.FC = () => {
                         />
                       </Box>
 
-                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
-                        <Table size="small">
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflowX: 'auto', mb: 2.5 }}>
+                        <Table size="small" sx={{ minWidth: 800 }}>
                           <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
                             <TableRow>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Sl. No.</TableCell>
@@ -1737,8 +1737,8 @@ const DailyReportPage: React.FC = () => {
                         <Chip icon={<FlagRoundedIcon sx={{ color: '#22c55e !important', fontSize: 14 }} />} label={`${weeklyAccEntries.length} Completed`} size="small" sx={{ background: alpha('#22c55e', 0.1), color: '#22c55e', fontWeight: 700 }} />
                       </Box>
 
-                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
-                      <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflowX: 'auto', mb: 2.5 }}>
+                      <Table sx={{ tableLayout: 'fixed', width: '100%', minWidth: 900 }}>
                         <colgroup>
                           <col style={{ width: '60px' }} />
                           <col style={{ width: '25%' }} />
@@ -1897,8 +1897,8 @@ const DailyReportPage: React.FC = () => {
                         </Typography>
                       </Box>
 
-                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
-                        <Table size="small">
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflowX: 'auto', mb: 2.5 }}>
+                        <Table size="small" sx={{ minWidth: 1050 }}>
                           <TableHead sx={{ background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #107c41, #0e6b37)' }}>
                             <TableRow>
                               <TableCell sx={{ color: '#fff', fontWeight: 800, width: 60, textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)', py: 1.25, fontSize: 13.5 }}>Sl. No.</TableCell>
@@ -2126,8 +2126,8 @@ const DailyReportPage: React.FC = () => {
                         </Typography>
                       </Box>
 
-                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflow: 'hidden', mb: 2.5 }}>
-                        <Table size="small">
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', overflowX: 'auto', mb: 2.5 }}>
+                        <Table size="small" sx={{ minWidth: 800 }}>
                           <colgroup>
                             <col style={{ width: '60px' }} />
                             <col style={{ width: '180px' }} />

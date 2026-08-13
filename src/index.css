@@ -8,6 +8,7 @@ html, body, #root {
   padding: 0;
   height: 100%;
   font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 17px;
 }
 
 /* Smooth scrollbar */
