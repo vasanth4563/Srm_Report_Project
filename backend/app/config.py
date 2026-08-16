@@ -20,10 +20,11 @@ def load_env_file():
 load_env_file()
 
 class Settings(BaseSettings):
+    DB_TYPE: str = "postgresql"
     DB_HOST: str = "localhost"
-    DB_PORT: str = "3306"
-    DB_USER: str = "root"
-    DB_PASSWORD: str = "report@123"
+    DB_PORT: str = "5432"
+    DB_USER: str = "postgres"
+    DB_PASSWORD: str = ""
     DB_NAME: str = "report"
 
     JWT_SECRET: str = os.getenv("JWT_SECRET", "super-secret-key-change-in-production-1234567890")
@@ -38,7 +39,11 @@ class Settings(BaseSettings):
                 return direct_url.replace("postgres://", "postgresql://", 1)
             return direct_url
         from urllib.parse import quote_plus
-        encoded_password = quote_plus(self.DB_PASSWORD)
-        return f"mysql+pymysql://{self.DB_USER}:{encoded_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        encoded_password = quote_plus(self.DB_PASSWORD) if self.DB_PASSWORD else ""
+        password_part = f":{encoded_password}" if encoded_password else ""
+        if self.DB_TYPE == "mysql":
+            return f"mysql+pymysql://{self.DB_USER}{password_part}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        else:
+            return f"postgresql://{self.DB_USER}{password_part}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 settings = Settings()

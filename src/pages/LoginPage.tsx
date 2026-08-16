@@ -2,23 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Card, CardContent, TextField, Button, Typography,
   IconButton, InputAdornment, Alert, Fade, CircularProgress,
-  alpha, useTheme, Autocomplete, Divider, MenuItem, Select,
-  FormControl, InputLabel, createFilterOptions,
+  alpha, useTheme,
 } from '@mui/material';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
-import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
-import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
-import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
-import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import PhoneAndroidRoundedIcon from '@mui/icons-material/PhoneAndroidRounded';
-import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiRequest } from '../utils/api.ts';
@@ -48,26 +38,42 @@ const LoginPage: React.FC = () => {
   }, []);
 
   // ── Sign-In state
-  const [selectedUser, setSelectedUser] = useState<any | null>(null);
-  const [loginEmail, setLoginEmail]     = useState('');
-  const [password, setPassword]         = useState('');
-  const [showPwd, setShowPwd]           = useState(false);
-  const [signInError, setSignInError]   = useState('');
-  const [signingIn, setSigningIn]       = useState(false);
-  const [nameSearchInput, setNameSearchInput] = useState('');
-  const [nameSearchOpen, setNameSearchOpen]   = useState(false);
+  // ── Sign-In state
+  const [loginEmail, setLoginEmail]   = useState('');
+  const [password, setPassword]       = useState('');
+  const [showPwd, setShowPwd]         = useState(false);
+  const [signInError, setSignInError] = useState('');
+  const [signingIn, setSigningIn]     = useState(false);
 
   // ── Sign-In handler ────────────────────────────────────────────────────────
   const handleLogin = async () => {
-    const targetEmail = loginEmail.trim() || selectedUser?.email;
-    if (!targetEmail)  { setSignInError('Please select your name from the list or enter your email address.'); return; }
-    if (!password)     { setSignInError('Please enter your password.'); return; }
-    setSigningIn(true); setSignInError('');
+    let targetEmail = loginEmail.trim();
+    if (!targetEmail) {
+      setSignInError('Please select your name or enter your email address/employee ID.');
+      return;
+    }
+
+    // Resolve name to email if they typed a name instead of email/ID
+    if (!targetEmail.includes('@') && !targetEmail.toUpperCase().startsWith('EMP-') && !targetEmail.toUpperCase().startsWith('CH-')) {
+      const match = runtimeUsers.find(
+        (u) => u.name.toLowerCase().includes(targetEmail.toLowerCase())
+      );
+      if (match) {
+        targetEmail = match.email;
+      }
+    }
+
+    if (!password) {
+      setSignInError('Please enter your password.');
+      return;
+    }
+    setSigningIn(true);
+    setSignInError('');
     await new Promise((r) => setTimeout(r, 700));
     const ok = await login(targetEmail.toLowerCase(), password);
     setSigningIn(false);
     if (ok) navigate('/dashboard');
-    else setSignInError('Incorrect email or password. Please try again.');
+    else setSignInError('Incorrect email/ID or password. Please try again.');
   };
 
   return (
@@ -147,91 +153,37 @@ const LoginPage: React.FC = () => {
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* Name search & type field */}
-              <Autocomplete
-                freeSolo
-                open={nameSearchOpen && nameSearchInput.trim().length > 0}
-                onOpen={() => {
-                  if (nameSearchInput.trim().length > 0) setNameSearchOpen(true);
-                }}
-                onClose={() => setNameSearchOpen(false)}
-                options={runtimeUsers}
-                filterOptions={createFilterOptions<any>({
-                  matchFrom: 'any',
-                  stringify: (option) => {
-                    if (typeof option === 'string') return option;
-                    return `${option.name} ${option.title || ''} ${option.email || ''} ${option.designation || ''}`;
-                  },
-                })}
-                getOptionLabel={(u) => typeof u === 'string' ? u : `${u.title ? u.title + ' ' : ''}${u.name}`}
-                groupBy={(u) => typeof u === 'object' && u?.title ? u.title : ''}
-                value={selectedUser}
-                onChange={(_, val) => {
-                  if (typeof val === 'object' && val !== null) {
-                    setSelectedUser(val);
-                    setLoginEmail(val.email || '');
-                    setNameSearchInput(`${val.title ? val.title + ' ' : ''}${val.name}`);
-                  } else if (typeof val === 'string') {
-                    const match = runtimeUsers.find(
-                      (u) => u.name.toLowerCase().includes(val.toLowerCase()) || u.email.toLowerCase().includes(val.toLowerCase())
-                    );
-                    if (match) {
-                      setSelectedUser(match);
-                      setLoginEmail(match.email);
-                    } else {
-                      setSelectedUser(null);
-                      setLoginEmail(val);
-                    }
-                    setNameSearchInput(val);
-                  } else {
-                    setSelectedUser(null);
-                    setLoginEmail('');
-                    setNameSearchInput('');
-                  }
-                  setNameSearchOpen(false);
+              <TextField
+                fullWidth
+                label="Search Name / Email / ID"
+                placeholder="Type name, email, or employee ID (e.g. Kathiravan)"
+                value={loginEmail}
+                onChange={(e) => {
+                  setLoginEmail(e.target.value);
                   setSignInError('');
                 }}
-                onInputChange={(_, newInputValue) => {
-                  setNameSearchInput(newInputValue);
-                  if (newInputValue.trim().length > 0) {
-                    setNameSearchOpen(true);
-                  } else {
-                    setNameSearchOpen(false);
-                    setSelectedUser(null);
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PersonRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                  htmlInput: {
+                    list: "users-list",
+                    autoComplete: "off"
                   }
                 }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search or Enter Name / Email"
-                    placeholder="Type your name (e.g. Dr. Kathiravan)"
-                    fullWidth
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                    InputProps={{
-                      ...(params.InputProps || {}),
-                      startAdornment: (
-                        <>
-                          <InputAdornment position="start">
-                            <PersonRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
-                          </InputAdornment>
-                          {params.InputProps?.startAdornment ?? null}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props} key={option.id || option.email}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {option.title ? `${option.title} ` : ''}{option.name}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                        {option.designation} · {option.institution}
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
               />
+              <datalist id="users-list">
+                {runtimeUsers.map((u) => (
+                  <option key={u.id} value={u.email}>
+                    {u.title ? `${u.title} ` : ''}{u.name} — {u.designation} ({u.institution})
+                  </option>
+                ))}
+              </datalist>
 
               {/* Password field */}
               <TextField
@@ -242,15 +194,17 @@ const LoginPage: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start"><LockRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} /></InputAdornment>,
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPwd((p) => !p)} onMouseDown={(e) => e.preventDefault()} edge="end" sx={{ color: theme.palette.text.secondary }}>
-                        {showPwd ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: <InputAdornment position="start"><LockRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} /></InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton onClick={() => setShowPwd((p) => !p)} onMouseDown={(e) => e.preventDefault()} edge="end" sx={{ color: theme.palette.text.secondary }}>
+                          {showPwd ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }
                 }}
               />
 

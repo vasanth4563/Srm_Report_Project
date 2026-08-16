@@ -50,15 +50,19 @@ export const getTheme = (mode: 'light' | 'dark') =>
     components: {
       MuiButton: {
         styleOverrides: {
-          root: { textTransform: 'none', fontWeight: 600, borderRadius: 10 },
-          containedPrimary: {
-            background: 'linear-gradient(135deg, #4c248b 0%, #0284c7 50%, #38bdf8 100%)',
-            boxShadow: '0 4px 15px rgba(76, 36, 139, 0.35)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #6233ab 0%, #38bdf8 100%)',
-              boxShadow: '0 6px 20px rgba(56, 189, 248, 0.45)',
-            },
-          },
+          root: ({ ownerState }: any) => ({
+            textTransform: 'none',
+            fontWeight: 600,
+            borderRadius: 10,
+            ...(ownerState.variant === 'contained' && ownerState.color === 'primary' && {
+              background: 'linear-gradient(135deg, #4c248b 0%, #0284c7 50%, #38bdf8 100%)',
+              boxShadow: '0 4px 15px rgba(76, 36, 139, 0.35)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #6233ab 0%, #38bdf8 100%)',
+                boxShadow: '0 6px 20px rgba(56, 189, 248, 0.45)',
+              },
+            }),
+          }),
         },
       },
       MuiCard: {

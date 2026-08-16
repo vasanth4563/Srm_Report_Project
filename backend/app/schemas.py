@@ -39,7 +39,7 @@ class UserResponse(BaseModel):
     branch: Optional[str] = None
     mobile: Optional[str] = None
     role: str
-    avatar: str
+    avatar: Optional[str] = ""
     email_sent: Optional[bool] = None
     email_status_msg: Optional[str] = None
 

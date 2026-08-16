@@ -119,20 +119,10 @@ const SettingsPage: React.FC = () => {
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
               Change Password
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
+             <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField fullWidth label="Current Password" type={showCurrent ? 'text' : 'password'}
                   value={pwdForm.current} onChange={(e) => setPwdForm((p) => ({ ...p, current: e.target.value }))}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><LockRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} /></InputAdornment>,
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setShowCurrent((p) => !p)} onMouseDown={(e) => e.preventDefault()} edge="end" sx={{ color: theme.palette.text.secondary }}>
-                          {showCurrent ? <VisibilityOffRoundedIcon fontSize="small" /> : <VisibilityRoundedIcon fontSize="small" />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                   slotProps={{
                     input: {
                       startAdornment: <InputAdornment position="start"><LockRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} /></InputAdornment>,
@@ -147,19 +137,9 @@ const SettingsPage: React.FC = () => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField fullWidth label="New Password" type={showNew ? 'text' : 'password'}
                   value={pwdForm.newPwd} onChange={(e) => setPwdForm((p) => ({ ...p, newPwd: e.target.value }))}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} /></InputAdornment>,
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setShowNew((p) => !p)} onMouseDown={(e) => e.preventDefault()} edge="end" sx={{ color: theme.palette.text.secondary }}>
-                          {showNew ? <VisibilityOffRoundedIcon fontSize="small" /> : <VisibilityRoundedIcon fontSize="small" />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                   slotProps={{
                     input: {
                       startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} /></InputAdornment>,
@@ -174,19 +154,9 @@ const SettingsPage: React.FC = () => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField fullWidth label="Confirm New Password" type={showConfirm ? 'text' : 'password'}
                   value={pwdForm.confirmPwd} onChange={(e) => setPwdForm((p) => ({ ...p, confirmPwd: e.target.value }))}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} /></InputAdornment>,
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setShowConfirm((p) => !p)} onMouseDown={(e) => e.preventDefault()} edge="end" sx={{ color: theme.palette.text.secondary }}>
-                          {showConfirm ? <VisibilityOffRoundedIcon fontSize="small" /> : <VisibilityRoundedIcon fontSize="small" />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
                   slotProps={{
                     input: {
                       startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} /></InputAdornment>,

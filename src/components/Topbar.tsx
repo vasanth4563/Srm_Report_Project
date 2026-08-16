@@ -1,12 +1,10 @@
 import React from 'react';
-import { AppBar, Toolbar, IconButton, Typography, Avatar, Tooltip, Box, useTheme, alpha, Chip } from '@mui/material';
+import { AppBar, Toolbar, IconButton, Typography, Avatar, Tooltip, Box, useTheme, Chip } from '@mui/material';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { useColorMode } from '../context/ThemeContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
-import BrandLogo from './BrandLogo.tsx';
 
 interface TopbarProps { pageTitle: string; onMenuClick: () => void }
 

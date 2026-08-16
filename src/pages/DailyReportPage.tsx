@@ -2,30 +2,20 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Card, CardContent, TextField, Button, Typography, Grid, Chip,
   Divider, Tooltip, Fade, Alert, Snackbar, alpha, useTheme,
-  Tab, Tabs, LinearProgress, Table, TableHead, TableBody,
+  Tab, Tabs, Table, TableHead, TableBody,
   TableRow, TableCell, TableContainer, IconButton, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel,
   CircularProgress, TablePagination, InputBase
 } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid';
-import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
-import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
-import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
-import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import CalendarTodayRoundedIcon from '@mui/icons-material/CalendarTodayRounded';
 import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import EmojiEventsRoundedIcon from '@mui/icons-material/EmojiEventsRounded';
-import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
-import TrackChangesRoundedIcon from '@mui/icons-material/TrackChangesRounded';
 import EmojiObjectsRoundedIcon from '@mui/icons-material/EmojiObjectsRounded';
-import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
-import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import Layout from '../components/Layout.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -77,10 +67,6 @@ type WeeklyPlanRow = {
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const GOAL_START = new Date('2026-06-01');
-const GOAL_END   = new Date('2026-09-08');
-const fmtDate = (d: Date) =>
-  d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 const getReportDateBounds = () => {
   const now = new Date();
@@ -343,7 +329,7 @@ const DailyReportPage: React.FC = () => {
   // Track which row IDs have already been edited for their dates (one-time edit enforcement)
   const [editedDates, setEditedDates] = useState<Record<string, (string | number)[]>>(() => {
     try {
-      const stored = localStorage.getItem(`edited_dates_${user?.empId || 'default'}`);
+      const stored = localStorage.getItem(`edited_dates_${user?.id || 'default'}`);
       return stored ? JSON.parse(stored) : { goals: [], accomplishments: [], pending: [] };
     } catch {
       return { goals: [], accomplishments: [], pending: [] };
@@ -359,7 +345,7 @@ const DailyReportPage: React.FC = () => {
   // Tab 1 Edit Dialog State
   const [editGoalDialogOpen, setEditGoalDialogOpen] = useState(false);
   const [editGoalDialogId, setEditGoalDialogId] = useState<number | ''>('');
-  const [editGoalDialogForm, setEditGoalDialogForm] = useState({ date: '', goal: '', responsiblePerson: '' });
+  const [editGoalDialogForm, setEditGoalDialogForm] = useState({ date: '', dateEnd: '', goal: '', responsiblePerson: '' });
 
   // Tab 2 Edit Dialog State
   const [editAccDialogOpen, setEditAccDialogOpen] = useState(false);
@@ -396,23 +382,16 @@ const DailyReportPage: React.FC = () => {
 
   // ── 100 Days Goal Form state ──
   const [goalForm, setGoalForm] = useState(blankGoal);
-  const [goalErrors, setGoalErrors] = useState<Partial<typeof blankGoal>>({});
 
   // ── Accomplishment state ──
   const [accForm, setAccForm] = useState(blankAcc);
   const [accEntries, setAccEntries] = useState<AccomplishRow[]>([]);
-  const [dailyAccEntries, setDailyAccEntries] = useState<any[]>([]);
   const [weeklyAccEntries, setWeeklyAccEntries] = useState<any[]>([]);
-  const [dailyPage, setDailyPage] = useState(0);
-  const [dailyRowsPerPage, setDailyRowsPerPage] = useState(10);
   const [weeklyPage, setWeeklyPage] = useState(0);
   const [weeklyRowsPerPage, setWeeklyRowsPerPage] = useState(10);
-  const [accErrors, setAccErrors] = useState<Partial<typeof blankAcc>>({});
 
   // ── Pending & Priority state ──
-  const [pendingForm, setPendingForm] = useState(blankPending);
   const [pendingEntries, setPendingEntries] = useState<PendingRow[]>([]);
-  const [pendingErrors, setPendingErrors] = useState<Partial<typeof blankPending>>({});
 
   type PendingGridRow = {
     id?: number;
@@ -464,9 +443,7 @@ const DailyReportPage: React.FC = () => {
   };
 
   // ── Weekly Plan state ──
-  const [weekFrom, setWeekFrom] = useState(() => getReportDateBounds().todayStr);
-  const [weekTo,   setWeekTo]   = useState(() => addDaysToDate(getReportDateBounds().todayStr, 6));
-  const [weeklyForm, setWeeklyForm]       = useState(blankWeekly);
+  const [weeklyForm] = useState(blankWeekly);
   const [weeklyEntries, setWeeklyEntries] = useState<WeeklyPlanRow[]>([]);
   const [weeklyErrors, setWeeklyErrors]   = useState<Partial<typeof blankWeekly>>({});
 
@@ -532,33 +509,6 @@ const DailyReportPage: React.FC = () => {
     ]);
   };
 
-  const handlePrepareNextWeek = () => {
-    const todayStr = getReportDateBounds().todayStr;
-    let latestEndDate = todayStr;
-
-    if (weeklyEntries.length > 0) {
-      for (const w of weeklyEntries) {
-        const endDate = w.dateEnd || w.date_end || addDaysToDate(w.date, 6);
-        if (endDate > latestEndDate) {
-          latestEndDate = endDate;
-        }
-      }
-    }
-
-    const nextStart = addDaysToDate(latestEndDate, 1);
-    const nextEnd = addDaysToDate(nextStart, 6);
-
-    const grid: WeeklyGridRow[] = [];
-    for (let i = 0; i < 4; i++) {
-      grid.push({ date: nextStart, dateEnd: nextEnd, work: '' });
-    }
-    setWeeklyGrid(grid);
-    setSnack({
-      open: true,
-      msg: `Ready for next week's plans! (Range: ${new Date(nextStart).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} to ${new Date(nextEnd).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-      severity: 'info'
-    });
-  };
 
   // ── API Fetch Handlers ──
   const fetchReports = async () => {
@@ -616,12 +566,13 @@ const DailyReportPage: React.FC = () => {
       ]);
 
       const dailyFromReports = reportsData
-        .filter((r) => r.completed === true || r.completed === undefined)
+        .filter((r) => r.completed)
         .map((r) => ({
           id: r.id,
           area: r.area,
           work: r.report,
-          date: r.date,
+          dateStart: r.date,
+          dateEnd: r.date,
           completed: true
         }));
 
@@ -631,12 +582,13 @@ const DailyReportPage: React.FC = () => {
           id: a.id,
           area: a.area,
           work: a.work,
-          date: a.date_start,
+          dateStart: a.date_start,
+          dateEnd: a.date_end || a.date_start,
           completed: true
         }));
 
-      const allDaily = [...dailyFromReports, ...directAccs];
-      allDaily.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const allDaily: AccomplishRow[] = [...dailyFromReports, ...directAccs];
+      allDaily.sort((a, b) => (b.dateStart || '').localeCompare(a.dateStart || ''));
 
       const weeklyMapped = weeklyData
         .map((w) => ({
@@ -648,7 +600,6 @@ const DailyReportPage: React.FC = () => {
         }));
       weeklyMapped.sort((a, b) => (b.dateStart || '').localeCompare(a.dateStart || ''));
 
-      setDailyAccEntries(allDaily);
       setWeeklyAccEntries(weeklyMapped);
       setAccEntries(allDaily);
     } catch (err) {
@@ -658,14 +609,6 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
-  const toggleAccomplishment = async (id: number) => {
-    try {
-      await apiRequest(`/api/accomplishments/${id}/toggle`, { method: 'PATCH' });
-      fetchAccomplishments();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to toggle accomplishment', severity: 'error' });
-    }
-  };
 
   const fetchPending = async () => {
     setLoading(true);
@@ -691,14 +634,6 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
-  const togglePending = async (id: number) => {
-    try {
-      await apiRequest(`/api/pending/${id}/toggle`, { method: 'PATCH' });
-      fetchPending();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to toggle pending item', severity: 'error' });
-    }
-  };
 
   const fetchWeekly = async () => {
     setLoading(true);
@@ -722,14 +657,6 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
-  const toggleWeekly = async (id: number) => {
-    try {
-      await apiRequest(`/api/weekly/${id}/toggle`, { method: 'PATCH' });
-      fetchWeekly();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to toggle weekly plan', severity: 'error' });
-    }
-  };
 
   // Load data depending on selected Tab
   useEffect(() => {
@@ -751,7 +678,7 @@ const DailyReportPage: React.FC = () => {
           try {
             await apiRequest('/api/reports/email-alert', {
               method: 'POST',
-              body: { missed_date_formatted: prevWorkingDayFormatted }
+              bodyData: { missed_date_formatted: prevWorkingDayFormatted }
             });
             localStorage.setItem(storageKey, 'true');
             console.log('Successfully sent missing daily report email warning.');
@@ -814,32 +741,6 @@ const DailyReportPage: React.FC = () => {
     ]);
   };
 
-  const handleAddGoal = async () => {
-    if (!validateGoal()) return;
-    const newDay = Number(goalForm.day);
-    if (goals.some((g) => g.day === newDay)) {
-      setGoalErrors({ day: 'A goal for this Sl. No. already exists' });
-      return;
-    }
-    try {
-      await apiRequest('/api/goals', {
-        method: 'POST',
-        bodyData: {
-          day: newDay,
-          date: goalForm.date,
-          goal: goalForm.goal,
-          responsible_person: goalForm.responsiblePerson.trim() || 'Self',
-          completed: true
-        }
-      });
-      setSnack({ open: true, msg: `Goal added for Sl. No. ${newDay}!`, severity: 'success' });
-      setGoalForm(blankGoal);
-      setGoalErrors({});
-      fetchGoals();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to add goal', severity: 'error' });
-    }
-  };
 
   const handleSaveEditGoal = async () => {
     if (editGoalDialogId !== '') {
@@ -860,7 +761,7 @@ const DailyReportPage: React.FC = () => {
           goals: [...(editedDates.goals || []), editGoalDialogId]
         };
         setEditedDates(updatedEdited);
-        localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+        localStorage.setItem(`edited_dates_${user?.id}`, JSON.stringify(updatedEdited));
 
         setEditGoalDialogOpen(false);
         setEditGoalDialogId('');
@@ -892,26 +793,6 @@ const DailyReportPage: React.FC = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleAddAccomplishment = async () => {
-    if (!validateAcc()) return;
-    try {
-      await apiRequest('/api/accomplishments', {
-        method: 'POST',
-        bodyData: {
-          area: accForm.area,
-          work: accForm.work,
-          date_start: accForm.dateStart,
-          date_end: accForm.dateEnd
-        }
-      });
-      setSnack({ open: true, msg: 'Accomplishment added!', severity: 'success' });
-      setAccForm(blankAcc);
-      setAccErrors({});
-      fetchAccomplishments();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to add', severity: 'error' });
-    }
-  };
 
   const handleSaveEditAcc = async () => {
     if (editAccDialogId !== '') {
@@ -1022,7 +903,7 @@ const DailyReportPage: React.FC = () => {
           pending: [...(editedDates.pending || []), editPendingDateDialog.rowId]
         };
         setEditedDates(updatedEdited);
-        localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+        localStorage.setItem(`edited_dates_${user?.id}`, JSON.stringify(updatedEdited));
 
         setEditPendingDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', status: '', work: '' });
         setSnack({ open: true, msg: 'Dates updated successfully!', severity: 'success' });
@@ -1037,14 +918,6 @@ const DailyReportPage: React.FC = () => {
 
 
 
-  // ── Tab 4 Weekly Plan Logic ──
-  const validateWeekly = () => {
-    const e: Partial<typeof blankWeekly> = {};
-    if (!weeklyForm.date)           e.date = 'Required';
-    if (!weeklyForm.work.trim())    e.work = 'Required';
-    setWeeklyErrors(e);
-    return Object.keys(e).length === 0;
-  };
 
   const handleAddWeekly = async () => {
     const todayStr = getReportDateBounds().todayStr;
@@ -1126,20 +999,9 @@ const DailyReportPage: React.FC = () => {
     ]);
   };
 
-  const handleReset = () => {
-    setForm(initialForm);
-    const todayStr = getReportDateBounds().todayStr;
-    setReportGrid([
-      { date: todayStr, area: '', work: '' },
-      { date: todayStr, area: '', work: '' },
-      { date: todayStr, area: '', work: '' },
-      { date: todayStr, area: '', work: '' }
-    ]);
-    setErrors({});
-  };
 
   const handleSubmit = async () => {
-    const { minDateStr, maxDateStr, todayStr } = getReportDateBounds();
+    const { todayStr } = getReportDateBounds();
     const defaultDate = form.date || todayStr;
     const e: Partial<typeof form> = {};
 
@@ -1217,97 +1079,8 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
-  // ── Daily Report columns ──
-  const reportColumns: GridColDef[] = [
-    {
-      field: 'slNo', headerName: 'SI.NO', flex: 0.4, minWidth: 60,
-      renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" sx={{ fontWeight: 700, color: theme.palette.primary.main, background: alpha(theme.palette.primary.main, 0.1), borderRadius: '8px', px: 1.5, py: 0.25, fontSize: 12 }}>
-          {String(p.value as number).padStart(2, '0')}
-        </Typography>
-      ),
-    },
-    {
-      field: 'date', headerName: 'Date', flex: 0.8, minWidth: 110,
-      renderCell: (p: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <CalendarMonthRoundedIcon sx={{ fontSize: 15, color: theme.palette.text.secondary }} />
-          <Typography variant="body2" sx={{ fontSize: 13 }}>
-            {new Date(p.value as string).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      field: 'area', headerName: 'Area', flex: 1, minWidth: 130,
-      renderCell: (p: GridRenderCellParams) => (
-        <Chip label={p.value as string} size="small" sx={{ fontSize: 11, fontWeight: 600, background: alpha(theme.palette.secondary.main, 0.12), color: theme.palette.secondary.main }} />
-      ),
-    },
-    {
-      field: 'report', headerName: 'Work', flex: 2, minWidth: 200,
-      renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" title={p.value as string} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: theme.palette.text.secondary, fontSize: 13, py: 0.5, lineHeight: 1.5 }}>
-          {p.value as string}
-        </Typography>
-      ),
-    },
-    {
-      field: 'completed', headerName: 'Status', flex: 0.5, minWidth: 80, sortable: false,
-      renderCell: (p: GridRenderCellParams) => (
-        <FlagCell completed={p.value as boolean} onToggle={() => toggleReport(p.row.id as number)} />
-      ),
-    },
-  ];
-
-  // ── 100 Days columns ──
-  const goalColumns: GridColDef[] = [
-    {
-      field: 'day', headerName: 'Sl. No.', flex: 0.4, minWidth: 65,
-      renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" sx={{ fontWeight: 800, color: '#6366f1', background: alpha('#6366f1', 0.12), borderRadius: '8px', px: 1.2, py: 0.3, fontSize: 13 }}>
-          {String(p.value as number).padStart(3, '0')}
-        </Typography>
-      ),
-    },
-    {
-      field: 'date', headerName: 'Date', flex: 0.8, minWidth: 120,
-      renderCell: (p: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <CalendarMonthRoundedIcon sx={{ fontSize: 16, color: theme.palette.text.secondary }} />
-          <Typography variant="body2" sx={{ fontSize: 14, fontWeight: 700 }}>
-            {new Date(p.value as string).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      field: 'goal', headerName: 'Work', flex: 2, minWidth: 200,
-      renderCell: (p: GridRenderCellParams) => (
-        <Typography variant="body2" title={p.value as string} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.palette.text.primary, fontSize: 14.5, fontWeight: 600 }}>
-          {p.value as string}
-        </Typography>
-      ),
-    },
-    {
-      field: 'completed', headerName: 'Status', flex: 0.5, minWidth: 80, sortable: false,
-      renderCell: (p: GridRenderCellParams) => (
-        <FlagCell completed={p.value as boolean} onToggle={() => toggleGoal(p.row.id as number)} />
-      ),
-    },
-  ];
-
   const completedGoals = goals.filter((g) => g.completed).length;
-  const progressPct = goals.length > 0 ? Math.round((completedGoals / goals.length) * 100) : 0;
-  const completedReports = rows.filter((r) => r.completed).length;
-  const gridSx = {
-    border: 'none',
-    '& .MuiDataGrid-columnHeaders': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(99,102,241,0.04)', borderBottom: `1px solid ${theme.palette.divider}` },
-    '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 800, fontSize: 13.5, color: theme.palette.text.secondary, textTransform: 'uppercase', letterSpacing: 0.5 },
-    '& .MuiDataGrid-row:hover': { background: alpha(theme.palette.primary.main, 0.04) },
-    '& .MuiDataGrid-cell': { borderBottom: `1px solid ${theme.palette.divider}`, alignItems: 'center', display: 'flex' },
-    '& .MuiDataGrid-footerContainer': { borderTop: `1px solid ${theme.palette.divider}`, justifyContent: 'center' },
-  };
+
 
   return (
     <Layout pageTitle="Daily Reports">
@@ -1355,9 +1128,9 @@ const DailyReportPage: React.FC = () => {
                           { label: 'Designation', value: user?.designation },
                           { label: 'Institution / Unit', value: user?.institution },
                         ].map((f) => (
-                          <Grid item xs={12} sm={4} key={f.label}>
+                          <Grid size={{ xs: 12, sm: 4 }} key={f.label}>
                             <TextField fullWidth label={f.label} value={f.value ?? ''}
-                              InputProps={{ readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> }}
+                              slotProps={{ input: { readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> } }}
                               sx={{ '& .MuiOutlinedInput-root': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', '& fieldset': { borderStyle: 'dashed' } } }}
                             />
                           </Grid>
@@ -1384,16 +1157,18 @@ const DailyReportPage: React.FC = () => {
                                 ? "⏰ Submission for yesterday closed at 6:00 PM today. Previous dates are disabled."
                                 : "⏰ Submissions allowed until 6:00 PM of the next day. Older dates are disabled.")
                             }
-                            inputProps={{
-                              min: bounds.minDateStr,
-                              max: bounds.maxDateStr,
+                            slotProps={{
+                              htmlInput: {
+                                min: bounds.minDateStr,
+                                max: bounds.maxDateStr,
+                              },
+                              inputLabel: { shrink: true }
                             }}
                             onChange={(e) => {
                               const newDate = e.target.value;
                               setForm((p) => ({ ...p, date: newDate }));
                               syncGridWithReports(rows, newDate);
                             }}
-                            InputLabelProps={{ shrink: true }}
                             sx={{ mb: 2.5 }}
                           />
                         );
@@ -1526,10 +1301,10 @@ const DailyReportPage: React.FC = () => {
                           { label: 'Designation', value: user?.designation },
                           { label: 'Institution / Unit', value: user?.institution },
                         ].map((f) => (
-                          <Grid item xs={12} sm={4} key={f.label}>
+                          <Grid size={{ xs: 12, sm: 4 }} key={f.label}>
                             <TextField
                               fullWidth label={f.label} value={f.value ?? ''}
-                              InputProps={{ readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> }}
+                              slotProps={{ input: { readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> } }}
                               sx={{ '& .MuiOutlinedInput-root': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', '& fieldset': { borderStyle: 'dashed' } } }}
                             />
                           </Grid>
@@ -1880,9 +1655,9 @@ const DailyReportPage: React.FC = () => {
                           { label: 'Designation', value: user?.designation },
                           { label: 'Institution / Unit', value: user?.institution },
                         ].map((f) => (
-                          <Grid item xs={12} sm={4} key={f.label}>
+                          <Grid size={{ xs: 12, sm: 4 }} key={f.label}>
                             <TextField fullWidth label={f.label} value={f.value ?? ''}
-                              InputProps={{ readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> }}
+                              slotProps={{ input: { readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> } }}
                               sx={{ '& .MuiOutlinedInput-root': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', '& fieldset': { borderStyle: 'dashed' } } }}
                             />
                           </Grid>
@@ -2110,9 +1885,9 @@ const DailyReportPage: React.FC = () => {
                           { label: 'Designation', value: user?.designation },
                           { label: 'Institution / Unit', value: user?.institution },
                         ].map((f) => (
-                          <Grid item xs={12} sm={4} key={f.label}>
+                          <Grid size={{ xs: 12, sm: 4 }} key={f.label}>
                             <TextField fullWidth label={f.label} value={f.value ?? ''}
-                              InputProps={{ readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> }}
+                              slotProps={{ input: { readOnly: true, endAdornment: <LockRoundedIcon sx={{ color: theme.palette.text.disabled, fontSize: 18 }} /> } }}
                               sx={{ '& .MuiOutlinedInput-root': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', '& fieldset': { borderStyle: 'dashed' } } }}
                             />
                           </Grid>
@@ -2362,11 +2137,11 @@ const DailyReportPage: React.FC = () => {
                 </Typography>
               </Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editGoalDialogForm.date} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, date: e.target.value }))} />
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField label="Date of Commencement" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editGoalDialogForm.date} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, date: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editGoalDialogForm.dateEnd} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} />
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField label="Date of Completion" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editGoalDialogForm.dateEnd} onChange={(e) => setEditGoalDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} />
                 </Grid>
               </Grid>
             </>
@@ -2410,11 +2185,11 @@ const DailyReportPage: React.FC = () => {
               <TextField label="Area" fullWidth value={editAccDialogForm.area} onChange={(e) => setEditAccDialogForm((p) => ({ ...p, area: e.target.value }))} />
               <TextField label="Work" fullWidth value={editAccDialogForm.work} onChange={(e) => setEditAccDialogForm((p) => ({ ...p, work: e.target.value }))} />
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Start Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editAccDialogForm.dateStart} onChange={(e) => setEditAccDialogForm((p) => ({ ...p, dateStart: e.target.value }))} />
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField label="Start Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editAccDialogForm.dateStart} onChange={(e) => setEditAccDialogForm((p) => ({ ...p, dateStart: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="End Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editAccDialogForm.dateEnd} onChange={(e) => setEditAccDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} />
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField label="End Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editAccDialogForm.dateEnd} onChange={(e) => setEditAccDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} />
                 </Grid>
               </Grid>
             </>
@@ -2441,7 +2216,7 @@ const DailyReportPage: React.FC = () => {
                 setEditPendingDialogId(id);
                 const row = pendingEntries.find(r => r.id === id);
                 if (row) {
-                  setEditPendingDialogForm({ areas: row.areas, particulars: row.particulars, responsiblePerson: row.responsiblePerson || 'Self', dateStart: row.dateStart, dateEnd: row.dateEnd, status: row.status || '', remarks: row.remarks });
+                  setEditPendingDialogForm({ areas: row.areas, particulars: row.particulars, responsiblePerson: row.responsiblePerson || 'Self', dateStart: row.dateStart, dateEnd: row.dateEnd, status: row.status || '', completed: row.completed, remarks: row.remarks });
                 }
               }}
             >
@@ -2458,10 +2233,10 @@ const DailyReportPage: React.FC = () => {
               <TextField label="Areas" fullWidth value={editPendingDialogForm.areas} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, areas: e.target.value }))} />
               <TextField label="Particulars" fullWidth value={editPendingDialogForm.particulars} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, particulars: e.target.value }))} />
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}><TextField label="Date of Commencement" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
-                <Grid item xs={12} sm={6}><TextField label="Date of Completion" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField label="Date of Commencement" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editPendingDialogForm.dateStart} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateStart: e.target.value }))} /></Grid>
+                <Grid size={{ xs: 12, sm: 6 }}><TextField label="Date of Completion" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editPendingDialogForm.dateEnd} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, dateEnd: e.target.value }))} /></Grid>
               </Grid>
-              <TextField label="Status" fullWidth inputProps={{ autoComplete: 'off', name: 'status_text' }} value={editPendingDialogForm.status} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, status: e.target.value }))} />
+              <TextField label="Status" fullWidth slotProps={{ htmlInput: { autoComplete: 'off', name: 'status_text' } }} value={editPendingDialogForm.status} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, status: e.target.value }))} />
               <TextField label="Remarks" fullWidth value={editPendingDialogForm.remarks} onChange={(e) => setEditPendingDialogForm((p) => ({ ...p, remarks: e.target.value }))} />
             </>
           )}
@@ -2501,7 +2276,7 @@ const DailyReportPage: React.FC = () => {
 
           {editWeeklyDialogId !== '' && (
             <>
-              <TextField label="Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editWeeklyDialogForm.date} onChange={(e) => setEditWeeklyDialogForm((p) => ({ ...p, date: e.target.value }))} />
+              <TextField label="Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} value={editWeeklyDialogForm.date} onChange={(e) => setEditWeeklyDialogForm((p) => ({ ...p, date: e.target.value }))} />
               <TextField label="Work" fullWidth value={editWeeklyDialogForm.work} onChange={(e) => setEditWeeklyDialogForm((p) => ({ ...p, work: e.target.value }))} />
             </>
           )}
@@ -2533,24 +2308,24 @@ const DailyReportPage: React.FC = () => {
           </Box>
 
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 label="Date of Commencement"
                 type="date"
                 value={editAccDateDialog.dateStart}
                 onChange={(e) => setEditAccDateDialog((p) => ({ ...p, dateStart: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 label="Date of Completion"
                 type="date"
                 value={editAccDateDialog.dateEnd}
                 onChange={(e) => setEditAccDateDialog((p) => ({ ...p, dateEnd: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
           </Grid>
@@ -2581,7 +2356,7 @@ const DailyReportPage: React.FC = () => {
                   accomplishments: [...(editedDates.accomplishments || []), editAccDateDialog.rowId]
                 };
                 setEditedDates(updatedEdited);
-                localStorage.setItem(`edited_dates_${user?.empId}`, JSON.stringify(updatedEdited));
+                localStorage.setItem(`edited_dates_${user?.id}`, JSON.stringify(updatedEdited));
 
                 setSnack({ open: true, msg: 'Accomplishment dates updated successfully!', severity: 'success' });
                 setEditAccDateDialog({ open: false, rowId: '', dateStart: '', dateEnd: '', work: '' });
@@ -2615,24 +2390,24 @@ const DailyReportPage: React.FC = () => {
           </Box>
 
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 label="Date of Commencement"
                 type="date"
                 value={editPendingDateDialog.dateStart}
                 onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, dateStart: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 label="Date of Completion"
                 type="date"
                 value={editPendingDateDialog.dateEnd}
                 onChange={(e) => setEditPendingDateDialog((p) => ({ ...p, dateEnd: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
           </Grid>

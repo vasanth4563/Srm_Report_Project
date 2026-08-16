@@ -1,13 +1,13 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { apiRequest } from '../utils/api.ts';
-import { Url } from '../config/urls.ts';
 
 export type Employee = {
   id: string; title: string; name: string;
   designation: string; institution: string;
   email: string; avatar: string;
   branch: string; mobile: string;
-  role?: 'admin' | 'user';
+  role?: 'admin' | 'user' | 'chairman';
 };
 
 interface AuthContextType {
@@ -39,10 +39,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    const token = sessionStorage.getItem('access_token') || sessionStorage.getItem('token');
+    const token = sessionStorage.getItem('access_token') || sessionStorage.getItem('token') ||
+                  localStorage.getItem('access_token') || localStorage.getItem('token');
     if (token) {
       if (!sessionStorage.getItem('access_token')) {
         sessionStorage.setItem('access_token', token);
+      }
+      if (!localStorage.getItem('access_token')) {
+        localStorage.setItem('access_token', token);
       }
       fetchProfile();
     } else {
@@ -63,6 +67,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sessionStorage.setItem("role", response.role || "");
         sessionStorage.setItem("user_id", response.user_id || "");
 
+        localStorage.setItem("token", response.access_token);
+        localStorage.setItem("access_token", response.access_token);
+        localStorage.setItem("role", response.role || "");
+        localStorage.setItem("user_id", response.user_id || "");
+
         console.log("Login Successful, Token:", response.access_token);
         console.log("User ID:", response.user_id);
 
@@ -82,6 +91,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('role');
     sessionStorage.removeItem('user_id');
+
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('user_id');
+
     setIsAuthenticated(false);
     setUser(null);
   }, []);

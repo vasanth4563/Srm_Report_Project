@@ -101,7 +101,7 @@ const ProfilePage: React.FC = () => {
               </Typography>
               <Grid container spacing={2.5}>
                 {infoCards.map((info) => (
-                  <Grid item xs={12} sm={6} md={4} key={info.label}>
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={info.label}>
                     <Box sx={{
                       display: 'flex', alignItems: 'flex-start', gap: 1.5,
                       p: 2, borderRadius: '14px',
@@ -135,7 +135,7 @@ const ProfilePage: React.FC = () => {
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 2.5 }}>Contact Information</Typography>
                 <Grid container spacing={2.5}>
                   {user?.email && (
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, borderRadius: '14px', background: alpha('#f59e0b', 0.07), border: `1px solid ${alpha('#f59e0b', 0.15)}` }}>
                         <Box sx={{ width: 44, height: 44, borderRadius: '12px', background: alpha('#f59e0b', 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
                           <EmailRoundedIcon />
@@ -148,7 +148,7 @@ const ProfilePage: React.FC = () => {
                     </Grid>
                   )}
                   {user?.mobile && (
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, borderRadius: '14px', background: alpha('#ef4444', 0.07), border: `1px solid ${alpha('#ef4444', 0.15)}` }}>
                         <Box sx={{ width: 44, height: 44, borderRadius: '12px', background: alpha('#ef4444', 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
                           <PhoneAndroidRoundedIcon />
@@ -160,7 +160,7 @@ const ProfilePage: React.FC = () => {
                       </Box>
                     </Grid>
                   )}
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, borderRadius: '14px', background: alpha('#FA8833', 0.07), border: `1px solid ${alpha('#FA8833', 0.15)}` }}>
                       <Box sx={{ width: 44, height: 44, borderRadius: '12px', background: alpha('#FA8833', 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FA8833' }}>
                         <LocationOnRoundedIcon />

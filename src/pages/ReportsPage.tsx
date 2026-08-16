@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Card, Typography, Chip, alpha, useTheme, Fade, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel, CircularProgress } from '@mui/material';
+import { Box, Card, Typography, Chip, alpha, useTheme, Fade, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
@@ -95,7 +95,7 @@ const ReportsPage: React.FC = () => {
 
           <Box sx={{ display: 'flex', gap: 2, mb: 2.5, flexWrap: 'wrap' }}>
             <TextField placeholder="Search by area, report, or date..." value={search} onChange={(e) => setSearch(e.target.value)} size="small" sx={{ flex: 1, minWidth: 220 }}
-              InputProps={{ startAdornment: <InputAdornment position="start"><SearchRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} /></InputAdornment> }} />
+              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} /></InputAdornment> } }} />
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>Filter by Area</InputLabel>
               <Select value={areaFilter} label="Filter by Area" onChange={(e) => setAreaFilter(e.target.value)}>

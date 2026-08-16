@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Toolbar, useMediaQuery, useTheme } from '@mui/material';
-import Sidebar, { DRAWER_WIDTH, DRAWER_MINI } from './Sidebar.tsx';
+import Sidebar from './Sidebar.tsx';
 import Topbar from './Topbar.tsx';
 import { useState } from 'react';
 

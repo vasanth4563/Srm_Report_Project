@@ -7,57 +7,9 @@ from .routers import auth_router, report_router, goal_router, acc_router, pendin
 # Initialize tables (triggers uvicorn reload)
 Base.metadata.create_all(bind=engine)
 
-def run_date_end_migration():
-    db = SessionLocal()
-    try:
-        db.execute(text("ALTER TABLE weekly_plans ADD COLUMN date_end DATE NULL"))
-        db.commit()
-        print("[MIGRATION] Successfully added date_end to weekly_plans")
-    except Exception as e:
-        db.rollback()
-        print(f"[MIGRATION INFO] Could not add date_end (it might already exist): {e}")
-    finally:
-        db.close()
+from .database import run_migrations
+run_migrations(engine)
 
-def run_status_column_migration():
-    db = SessionLocal()
-    try:
-        db.execute(text("ALTER TABLE pending_works CHANGE COLUMN status_date status VARCHAR(255) NULL"))
-        db.commit()
-        print("[MIGRATION] Successfully renamed status_date to status in pending_works")
-    except Exception as e:
-        db.rollback()
-        print(f"[MIGRATION INFO] Could not rename status_date to status: {e}")
-        try:
-            db.execute(text("ALTER TABLE pending_works ADD COLUMN status VARCHAR(255) NULL"))
-            db.commit()
-            print("[MIGRATION] Successfully added status column to pending_works")
-        except Exception as e2:
-            db.rollback()
-            print(f"[MIGRATION INFO] Could not add status column: {e2}")
-    finally:
-        db.close()
-
-def run_edited_once_migration():
-    db = SessionLocal()
-    try:
-        db.execute(text("ALTER TABLE daily_reports ADD COLUMN edited_once TINYINT(1) DEFAULT 0"))
-        db.commit()
-        with open(r"c:\Users\vasan\OneDrive\Desktop\Report\backend\migration_error.log", "w") as f:
-            f.write("Migration success!")
-        print("[MIGRATION] Successfully added edited_once to daily_reports")
-    except Exception as e:
-        db.rollback()
-        with open(r"c:\Users\vasan\OneDrive\Desktop\Report\backend\migration_error.log", "w") as f:
-            f.write(f"Migration error: {e}")
-        print(f"[MIGRATION INFO] Could not add edited_once to daily_reports: {e}")
-    finally:
-        db.close()
-
-from sqlalchemy import text
-run_date_end_migration()
-run_status_column_migration()
-run_edited_once_migration()
 
 def copy_logo_file():
     import shutil
@@ -84,6 +36,65 @@ def copy_logo_file():
             print(f"[ICON COPY ERROR] {e}")
 
 copy_logo_file()
+
+def seed_default_users():
+    db = SessionLocal()
+    try:
+        from .auth import get_password_hash
+        count = db.query(User).count()
+        if count == 0:
+            print("[SEED] No users found. Seeding default accounts...")
+            users_to_seed = [
+                User(
+                    id="CH-001",
+                    email="chairman@srmist.edu.in",
+                    password_hash=get_password_hash("SRM@1234"),
+                    title="Mr.",
+                    name="Chairman",
+                    designation="Chairman",
+                    institution="SRM Group",
+                    branch="Ramapuram",
+                    mobile="9876543212",
+                    role="chairman",
+                    avatar="CH"
+                ),
+                User(
+                    id="EMP-001",
+                    email="raji@srmist.edu.in",
+                    password_hash=get_password_hash("SRM@1234"),
+                    title="Dr.",
+                    name="Dr. Raji",
+                    designation="Administrator",
+                    institution="SRM Ramapuram",
+                    branch="Ramapuram",
+                    mobile="9876543210",
+                    role="admin",
+                    avatar="DR"
+                ),
+                User(
+                    id="EMP-002",
+                    email="kathiravan@srmist.edu.in",
+                    password_hash=get_password_hash("SRM@1234"),
+                    title="Dr.",
+                    name="Dr. Kathiravan",
+                    designation="Professor",
+                    institution="SRM Ramapuram",
+                    branch="Ramapuram",
+                    mobile="9876543211",
+                    role="user",
+                    avatar="DK"
+                )
+            ]
+            db.add_all(users_to_seed)
+            db.commit()
+            print("[SEED] Successfully seeded default accounts (Chairman, Admin, User).")
+    except Exception as e:
+        db.rollback()
+        print(f"[SEED ERROR] Failed to seed default accounts: {e}")
+    finally:
+        db.close()
+
+seed_default_users()
 
 def sync_user_roles():
     db = SessionLocal()

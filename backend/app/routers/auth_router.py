@@ -106,3 +106,4 @@ def get_me(current_user: models.User = Depends(auth.get_current_user)):
 @router.get("/users", response_model=List[schemas.UserResponse])
 def get_public_users(db: Session = Depends(get_db)):
     return db.query(models.User).all()
+

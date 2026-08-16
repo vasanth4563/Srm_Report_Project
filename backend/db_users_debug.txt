@@ -1,0 +1,5 @@
+Found 4 users:
+ID: CH-001, Name: Chairman, Email: chairman@srmist.edu.in, Role: chairman, Hash: $2b$12$uwOq8hSrLX5/7BYb7OyrS.kGAGeeJr8MZqmJyQpQs8cI1VzBleILu
+ID: EMP-001, Name: Dr. Raji, Email: raji@srmist.edu.in, Role: admin, Hash: $2b$12$.5YobCDjMV/nOBd068wNtO296Akd/F9D6uX/0rXFUZUf/aVokgsj.
+ID: EMP-002, Name: Dr. Kathiravan, Email: kathiravan@srmist.edu.in, Role: user, Hash: $2b$12$xFgV2xKYIY8OiSqnhvtRKeLN4iCloGYkdO1kSrdYzEO33cnBZLzha
+ID: EMP-004, Name: Aania, Email: aaniashehanaz@gmail.com, Role: user, Hash: $2b$12$YOdg1IVndw5JNehphEdWjOQKcdcYv490hvHibey7OJu76EiD8sIBO

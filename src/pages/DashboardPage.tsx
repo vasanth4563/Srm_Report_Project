@@ -24,21 +24,13 @@ import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
-import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import KeyRoundedIcon from '@mui/icons-material/KeyRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
-import ExtensionRoundedIcon from '@mui/icons-material/ExtensionRounded';
-import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
-import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
-import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
-import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
-import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
-import { Switch, Tooltip } from '@mui/material';
+import { Tooltip } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
 import Layout from '../components/Layout.tsx';
@@ -73,31 +65,6 @@ const DashboardPage: React.FC = () => {
   // Dynamic statistics state
   const [reports, setReports] = useState<any[]>([]);
 
-  // API Keys & Integrations state
-  const [apiKey, setApiKey] = useState('srm_live_9a8b7c6d5e4f3a2b1c8d');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [integrations, setIntegrations] = useState([
-    { id: 'srm_sync', name: 'SRM Central Data Sync', desc: 'Real-time synchronization with institutional portal', connected: true, icon: '🔄', status: 'Live · 2 mins ago' },
-    { id: 'email_notif', name: 'Automated Email Dispatcher', desc: 'Send daily summary and weekly reports to HOD/Dean', connected: true, icon: '📧', status: 'Active · Daily 5 PM' },
-    { id: 'teams_webhook', name: 'Teams & Slack Integration', desc: 'Push notifications for pending report deadlines', connected: true, icon: '💬', status: 'Connected' },
-    { id: 'rest_api', name: 'Export & Analytics REST API', desc: 'Access raw report JSON & CSV data feeds', connected: true, icon: '⚡', status: 'Active · v2.4 API' },
-  ]);
-
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
-
-  const handleRegenerateKey = () => {
-    const randomHex = Array.from({ length: 20 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    setApiKey(`srm_live_${randomHex}`);
-  };
-
-  const toggleIntegration = (id: string) => {
-    setIntegrations(prev => prev.map(item => item.id === id ? { ...item, connected: !item.connected } : item));
-  };
 
   // Fetch user stats reports directly from backend API
   useEffect(() => {
@@ -158,7 +125,7 @@ const DashboardPage: React.FC = () => {
           try {
             await apiRequest('/api/reports/email-alert', {
               method: 'POST',
-              body: { missed_date_formatted: prevWorkingDayFormatted }
+              bodyData: { missed_date_formatted: prevWorkingDayFormatted }
             });
             localStorage.setItem(storageKey, 'true');
             console.log('Successfully sent missing daily report email warning.');
@@ -362,10 +329,6 @@ Portal: ${window.location.origin}/login`;
     fetchEditRequests();
   }, [user]);
 
-  const handleOpenUserMenu = (event: React.MouseEvent<HTMLButtonElement>, row: any) => {
-    setAnchorEl(event.currentTarget);
-    setMenuUser(row);
-  };
 
   const handleCloseMenu = () => {
     setAnchorEl(null);
@@ -518,7 +481,7 @@ Portal: ${window.location.origin}/login`;
         title={
           <Box sx={{ p: 1 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>Overall Progress: {overallPct}%</Typography>
-            <Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>
+            <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
               Completed: {targetUser.doneReports} / {targetUser.totalReports} reports
             </Typography>
             {categories.map(c => {
@@ -531,7 +494,7 @@ Portal: ${window.location.origin}/login`;
                 weekly: 'Weekly Plans'
               };
               return (
-                <Typography key={c.key} variant="caption" display="block" sx={{ color: c.color, fontWeight: 600 }}>
+                <Typography key={c.key} variant="caption" sx={{ display: 'block', color: c.color, fontWeight: 600 }}>
                   • {labels[c.key]}: {stats.done}/{stats.total} ({stats.pct}%)
                 </Typography>
               );
@@ -978,17 +941,6 @@ Portal: ${window.location.origin}/login`;
     }
   };
 
-  const getDialogTitle = () => {
-    if (!menuUser) return '';
-    const labelMap: Record<string, string> = {
-      daily: 'Daily Reports',
-      goals: '100 Days Goals',
-      acc: 'Accomplishment Report',
-      pending: 'Pending & Priority Work',
-      weekly: 'Weekly Plans',
-    };
-    return `${menuUser.name} - ${labelMap[selectedReportType] || ''}`;
-  };
 
   return (
     <Layout pageTitle="Dashboard">
@@ -1166,7 +1118,7 @@ Portal: ${window.location.origin}/login`;
                     { icon: <LocationOnRoundedIcon />, label: 'Branch', value: user?.branch || '—', color: branchColor },
                     { icon: <PhoneAndroidRoundedIcon />, label: 'Mobile Number', value: user?.mobile || '—', color: '#ef4444' },
                   ].map((info) => (
-                    <Grid item xs={1} sm={1} md={1} key={info.label} sx={{ display: 'flex' }}>
+                    <Grid size={{ xs: 1, sm: 1, md: 1 }} key={info.label} sx={{ display: 'flex' }}>
                       <Card sx={{
                         width: '100%', height: '100%', borderRadius: '16px',
                         border: `1px solid ${alpha(info.color, 0.2)}`,
@@ -1289,19 +1241,21 @@ Portal: ${window.location.origin}/login`;
                       placeholder="Search user name, designation..."
                       value={userSearchQuery}
                       onChange={(e) => setUserSearchQuery(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchRoundedIcon sx={{ color: user?.role === 'chairman' ? '#FA8833' : '#6366f1', fontSize: 20 }} />
-                          </InputAdornment>
-                        ),
-                        endAdornment: userSearchQuery ? (
-                          <InputAdornment position="end">
-                            <IconButton size="small" onClick={() => setUserSearchQuery('')}>
-                              <ClearRoundedIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          </InputAdornment>
-                        ) : null,
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchRoundedIcon sx={{ color: user?.role === 'chairman' ? '#FA8833' : '#6366f1', fontSize: 20 }} />
+                            </InputAdornment>
+                          ),
+                          endAdornment: userSearchQuery ? (
+                            <InputAdornment position="end">
+                              <IconButton size="small" onClick={() => setUserSearchQuery('')}>
+                                <ClearRoundedIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </InputAdornment>
+                          ) : null,
+                        }
                       }}
                       sx={{
                         width: { xs: '100%', sm: 260 },
@@ -1614,10 +1568,12 @@ Portal: ${window.location.origin}/login`;
             onClose={() => setProgressDialogOpen(false)}
             maxWidth="sm"
             fullWidth
-            PaperProps={{
-              sx: {
-                borderRadius: '24px',
-                p: 1.5,
+            slotProps={{
+              paper: {
+                sx: {
+                  borderRadius: '24px',
+                  p: 1.5,
+                }
               }
             }}
           >
@@ -1662,9 +1618,9 @@ Portal: ${window.location.origin}/login`;
                 const circumference = 2 * Math.PI * radius;
                 
                 return (
-                  <Grid container spacing={4} alignItems="center">
+                  <Grid container spacing={4} sx={{ alignItems: 'center' }}>
                     {/* Left: Donut Chart */}
-                    <Grid item xs={12} sm={5} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Grid size={{ xs: 12, sm: 5 }} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                       <Box sx={{ position: 'relative', width: 170, height: 170 }}>
                         <svg width="170" height="170" viewBox="0 0 150 150">
                           {/* Background Track */}
@@ -1766,7 +1722,7 @@ Portal: ${window.location.origin}/login`;
                     </Grid>
                     
                     {/* Right: Legend & Breakdowns */}
-                    <Grid item xs={12} sm={7}>
+                    <Grid size={{ xs: 12, sm: 7 }}>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {segments.map((seg, idx) => (
                           <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -1932,7 +1888,7 @@ Portal: ${window.location.origin}/login`;
             onClose={() => !addUserLoading && setAddUserDialogOpen(false)}
             maxWidth="md"
             fullWidth
-            PaperProps={{ sx: { borderRadius: '24px', p: 1 } }}
+            slotProps={{ paper: { sx: { borderRadius: '24px', p: 1 } } }}
           >
             <form onSubmit={handleCreateUserSubmit}>
               <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
@@ -1955,7 +1911,7 @@ Portal: ${window.location.origin}/login`;
                 )}
 
                 <Grid container spacing={2.5}>
-                  <Grid item xs={12} sm={3}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
                     <TextField
                       select
                       fullWidth
@@ -1970,7 +1926,7 @@ Portal: ${window.location.origin}/login`;
                     </TextField>
                   </Grid>
 
-                  <Grid item xs={12} sm={9}>
+                  <Grid size={{ xs: 12, sm: 9 }}>
                     <TextField
                       fullWidth
                       required
@@ -1982,7 +1938,7 @@ Portal: ${window.location.origin}/login`;
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       required
@@ -1994,7 +1950,7 @@ Portal: ${window.location.origin}/login`;
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Institution / Unit"
@@ -2004,7 +1960,7 @@ Portal: ${window.location.origin}/login`;
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       required
@@ -2014,13 +1970,15 @@ Portal: ${window.location.origin}/login`;
                       placeholder="user@srm.edu.in"
                       value={addUserForm.email}
                       onChange={(e) => setAddUserForm({ ...addUserForm, email: e.target.value })}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start"><EmailRoundedIcon sx={{ fontSize: 18, color: '#0284c7' }} /></InputAdornment>,
+                      slotProps={{
+                        input: {
+                          startAdornment: <InputAdornment position="start"><EmailRoundedIcon sx={{ fontSize: 18, color: '#0284c7' }} /></InputAdornment>,
+                        }
                       }}
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Mobile Number"
@@ -2028,13 +1986,15 @@ Portal: ${window.location.origin}/login`;
                       placeholder="e.g. +91 9876543210"
                       value={addUserForm.mobile}
                       onChange={(e) => setAddUserForm({ ...addUserForm, mobile: e.target.value })}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start"><PhoneAndroidRoundedIcon sx={{ fontSize: 18, color: theme.palette.text.secondary }} /></InputAdornment>,
+                      slotProps={{
+                        input: {
+                          startAdornment: <InputAdornment position="start"><PhoneAndroidRoundedIcon sx={{ fontSize: 18, color: theme.palette.text.secondary }} /></InputAdornment>,
+                        }
                       }}
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       select
                       fullWidth
@@ -2048,7 +2008,7 @@ Portal: ${window.location.origin}/login`;
                     </TextField>
                   </Grid>
 
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       select
                       fullWidth
@@ -2062,7 +2022,7 @@ Portal: ${window.location.origin}/login`;
                     </TextField>
                   </Grid>
 
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <TextField
                         fullWidth
@@ -2071,8 +2031,10 @@ Portal: ${window.location.origin}/login`;
                         size="small"
                         value={addUserForm.password}
                         onChange={(e) => setAddUserForm({ ...addUserForm, password: e.target.value })}
-                        InputProps={{
-                          startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ fontSize: 18, color: '#f59e0b' }} /></InputAdornment>,
+                        slotProps={{
+                          input: {
+                            startAdornment: <InputAdornment position="start"><KeyRoundedIcon sx={{ fontSize: 18, color: '#f59e0b' }} /></InputAdornment>,
+                          }
                         }}
                       />
                       <Tooltip title="Generate Strong Password">
@@ -2120,7 +2082,7 @@ Portal: ${window.location.origin}/login`;
             onClose={() => setAddUserSuccessData(null)}
             maxWidth="sm"
             fullWidth
-            PaperProps={{ sx: { borderRadius: '24px', p: 1 } }}
+            slotProps={{ paper: { sx: { borderRadius: '24px', p: 1 } } }}
           >
             <DialogTitle sx={{ textAlign: 'center', pt: 3, pb: 1 }}>
               <Avatar sx={{ width: 64, height: 64, bgcolor: alpha('#10b981', 0.15), color: '#10b981', mx: 'auto', mb: 1.5 }}>
@@ -2138,17 +2100,17 @@ Portal: ${window.location.origin}/login`;
                   USER CREDENTIALS SUMMARY
                 </Typography>
                 <Grid container spacing={1.5}>
-                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Employee Name:</Typography></Grid>
-                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 700 }}>{addUserSuccessData?.title} {addUserSuccessData?.name}</Typography></Grid>
+                  <Grid size={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Employee Name:</Typography></Grid>
+                  <Grid size={7}><Typography variant="body2" sx={{ fontWeight: 700 }}>{addUserSuccessData?.title} {addUserSuccessData?.name}</Typography></Grid>
 
-                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Login Email:</Typography></Grid>
-                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 700, color: '#0284c7' }}>{addUserSuccessData?.email}</Typography></Grid>
+                  <Grid size={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Login Email:</Typography></Grid>
+                  <Grid size={7}><Typography variant="body2" sx={{ fontWeight: 700, color: '#0284c7' }}>{addUserSuccessData?.email}</Typography></Grid>
 
-                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Password:</Typography></Grid>
-                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 800, color: '#dc2626', fontSize: 16 }}>{addUserSuccessData?.plainPassword}</Typography></Grid>
+                  <Grid size={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Password:</Typography></Grid>
+                  <Grid size={7}><Typography variant="body2" sx={{ fontWeight: 800, color: '#dc2626', fontSize: 16 }}>{addUserSuccessData?.plainPassword}</Typography></Grid>
 
-                  <Grid item xs={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Login Link:</Typography></Grid>
-                  <Grid item xs={7}><Typography variant="body2" sx={{ fontWeight: 700, color: '#4c248b' }}>{window.location.origin}/login</Typography></Grid>
+                  <Grid size={5}><Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.secondary }}>Login Link:</Typography></Grid>
+                  <Grid size={7}><Typography variant="body2" sx={{ fontWeight: 700, color: '#4c248b' }}>{window.location.origin}/login</Typography></Grid>
                 </Grid>
               </Card>
 
