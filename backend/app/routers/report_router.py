@@ -218,6 +218,15 @@ Please submit your report as soon as possible.
 
     if smtp_host and smtp_user and smtp_pass:
         try:
+            import socket
+            ipv4_host = smtp_host
+            try:
+                addresses = socket.getaddrinfo(smtp_host, None, socket.AF_INET)
+                if addresses:
+                    ipv4_host = addresses[0][4][0]
+            except Exception:
+                pass
+
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = smtp_sender
@@ -226,12 +235,12 @@ Please submit your report as soon as possible.
             msg.attach(MIMEText(html_content, "html"))
 
             if smtp_port == 465:
-                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                with smtplib.SMTP_SSL(ipv4_host, smtp_port, timeout=10, server_hostname=smtp_host) as server:
                     server.login(smtp_user, smtp_pass)
                     server.sendmail(smtp_sender, [recipient_email], msg.as_string())
             else:
-                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                    server.starttls()
+                with smtplib.SMTP(ipv4_host, smtp_port, timeout=10) as server:
+                    server.starttls(server_hostname=smtp_host)
                     server.login(smtp_user, smtp_pass)
                     server.sendmail(smtp_sender, [recipient_email], msg.as_string())
 
