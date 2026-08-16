@@ -89,33 +89,11 @@ const getReportDateBounds = () => {
 };
 
 const initialForm = { date: '', area: '', report: '' };
-const blankGoal = { day: '', date: '', goal: '', responsiblePerson: '' };
 const blankAcc = { area: '', work: '', dateStart: '', dateEnd: '' };
 const blankPending = { areas: '', particulars: '', responsiblePerson: '', dateStart: '', dateEnd: '', status: '', completed: false, remarks: '' };
 const blankWeekly = { date: '', dateEnd: '', work: '', responsiblePerson: '' };
 
-// ─── Flag Cell ───────────────────────────────────────────────────────────────
-const FlagCell: React.FC<{ completed: boolean; onToggle?: () => void }> = ({ completed, onToggle }) => (
-  <Tooltip title={completed ? 'Completed' : 'Pending'} arrow>
-    <Box 
-      onClick={onToggle}
-      sx={{
-        display: 'flex', flexDirection: 'row', alignItems: 'center',
-        cursor: onToggle ? 'pointer' : 'default', gap: 0.75,
-      }}
-    >
-      <FlagRoundedIcon sx={{
-        fontSize: 22,
-        color: completed ? '#22c55e' : '#ef4444',
-        filter: completed ? 'drop-shadow(0 0 5px rgba(34,197,94,0.6))' : 'drop-shadow(0 0 5px rgba(239,68,68,0.6))',
-        transition: 'all 0.3s',
-      }} />
-      <Typography sx={{ fontSize: 11, fontWeight: 700, color: completed ? '#22c55e' : '#ef4444', lineHeight: 1, whiteSpace: 'nowrap' }}>
-        {completed ? 'COMPLETED' : 'PENDING'}
-      </Typography>
-    </Box>
-  </Tooltip>
-);
+
 
 const addDaysToDate = (baseDateISO: string, daysToAdd: number): string => {
   if (!baseDateISO) return '';
@@ -380,11 +358,9 @@ const DailyReportPage: React.FC = () => {
   const [editWeeklyDialogId, setEditWeeklyDialogId] = useState<number | ''>('');
   const [editWeeklyDialogForm, setEditWeeklyDialogForm] = useState(blankWeekly);
 
-  // ── 100 Days Goal Form state ──
-  const [goalForm, setGoalForm] = useState(blankGoal);
 
-  // ── Accomplishment state ──
-  const [accForm, setAccForm] = useState(blankAcc);
+
+
   const [accEntries, setAccEntries] = useState<AccomplishRow[]>([]);
   const [weeklyAccEntries, setWeeklyAccEntries] = useState<any[]>([]);
   const [weeklyPage, setWeeklyPage] = useState(0);
@@ -442,8 +418,7 @@ const DailyReportPage: React.FC = () => {
     ]);
   };
 
-  // ── Weekly Plan state ──
-  const [weeklyForm] = useState(blankWeekly);
+
   const [weeklyEntries, setWeeklyEntries] = useState<WeeklyPlanRow[]>([]);
   const [weeklyErrors, setWeeklyErrors]   = useState<Partial<typeof blankWeekly>>({});
 
@@ -691,15 +666,7 @@ const DailyReportPage: React.FC = () => {
     }
   }, [isPrevReportMissing, prevWorkingDay, prevWorkingDayFormatted, user]);
 
-  // ── Tab 1 Goals Logic ──
-  const validateGoal = () => {
-    const e: Partial<typeof blankGoal> = {};
-    if (!goalForm.day.trim() || isNaN(Number(goalForm.day))) e.day = 'Valid Sl. No. / Day is required';
-    if (!goalForm.date)                                      e.date = 'Date is required';
-    if (!goalForm.goal.trim())                               e.goal = 'Work / Goal description is required';
-    setGoalErrors(e);
-    return Object.keys(e).length === 0;
-  };
+
 
   const handleAddGoalGrid = async () => {
     const newEntries = goalGrid.filter((row) => !row.id && row.goal.trim().length > 0);
@@ -773,25 +740,9 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
-  const toggleGoal = async (id: number) => {
-    try {
-      await apiRequest(`/api/goals/${id}/toggle`, { method: 'PATCH' });
-      fetchGoals();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to toggle goal', severity: 'error' });
-    }
-  };
 
-  // ── Tab 2 Accomplishments Logic ──
-  const validateAcc = () => {
-    const e: Partial<typeof blankAcc> = {};
-    if (!accForm.area.trim())  e.area = 'Area is required';
-    if (!accForm.work.trim())  e.work = 'Work is required';
-    if (!accForm.dateStart)    e.dateStart = 'Required';
-    if (!accForm.dateEnd)      e.dateEnd = 'Required';
-    setAccErrors(e);
-    return Object.keys(e).length === 0;
-  };
+
+
 
 
   const handleSaveEditAcc = async () => {
@@ -1070,16 +1021,9 @@ const DailyReportPage: React.FC = () => {
     }
   };
 
-  const toggleReport = async (id: number) => {
-    try {
-      await apiRequest(`/api/reports/${id}/toggle`, { method: 'PATCH' });
-      fetchReports();
-    } catch (err: any) {
-      setSnack({ open: true, msg: err.message || 'Failed to toggle status', severity: 'error' });
-    }
-  };
 
-  const completedGoals = goals.filter((g) => g.completed).length;
+
+
 
 
   return (
