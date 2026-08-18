@@ -185,12 +185,18 @@ Please keep your credentials secure.
             msg.attach(MIMEText(html_content, "html"))
 
             if smtp_port == 465:
-                with smtplib.SMTP_SSL(ipv4_host, smtp_port, timeout=10, server_hostname=smtp_host) as server:
+                import ssl
+                context = ssl.create_default_context()
+                server = smtplib.SMTP_SSL(timeout=10, context=context)
+                server._host = smtp_host
+                server.connect(ipv4_host, smtp_port)
+                with server:
                     server.login(smtp_user, smtp_pass)
                     server.sendmail(smtp_sender, [recipient_email], msg.as_string())
             else:
                 with smtplib.SMTP(ipv4_host, smtp_port, timeout=10) as server:
-                    server.starttls(server_hostname=smtp_host)
+                    server._host = smtp_host
+                    server.starttls()
                     server.login(smtp_user, smtp_pass)
                     server.sendmail(smtp_sender, [recipient_email], msg.as_string())
 
