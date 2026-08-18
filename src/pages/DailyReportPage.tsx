@@ -1332,14 +1332,6 @@ const DailyReportPage: React.FC = () => {
                                         const newDate = e.target.value;
                                         const updated = [...goalGrid];
                                         updated[idx].date = newDate;
-                                        let curDate = newDate;
-                                        for (let i = idx + 1; i < updated.length; i++) {
-                                          if (!updated[i].id) {
-                                            curDate = addDaysToDate(curDate, 1);
-                                            updated[i].date = curDate;
-                                            updated[i].dateEnd = curDate;
-                                          }
-                                        }
                                         setGoalGrid(updated);
                                       }}
                                       sx={{
