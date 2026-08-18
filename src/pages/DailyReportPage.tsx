@@ -1327,7 +1327,7 @@ const DailyReportPage: React.FC = () => {
                                   ) : (
                                     <Box component="input"
                                       type="date"
-                                      value={row.date || getReportDateBounds().todayStr}
+                                      value={row.date}
                                       onChange={(e: any) => {
                                         const newDate = e.target.value;
                                         const updated = [...goalGrid];
@@ -1383,7 +1383,7 @@ const DailyReportPage: React.FC = () => {
                                   ) : (
                                     <Box component="input"
                                       type="date"
-                                      value={row.dateEnd || row.date || getReportDateBounds().todayStr}
+                                      value={row.dateEnd}
                                       onChange={(e: any) => {
                                         const updated = [...goalGrid];
                                         updated[idx].dateEnd = e.target.value;
