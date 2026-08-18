@@ -12,7 +12,7 @@ def get_users_report_summary(
     db: Session = Depends(get_db),
     admin: models.User = Depends(auth.get_current_admin)
 ):
-    users = db.query(models.User).filter(models.User.role != 'chairman').all()
+    users = db.query(models.User).filter(models.User.role != 'chairman', models.User.role != 'admin').all()
     result = []
     
     for u in users:
