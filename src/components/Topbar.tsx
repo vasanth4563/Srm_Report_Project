@@ -79,10 +79,10 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
             component="img"
             src="/srm_logo.jpg"
             sx={{
-              height: { xs: 28, sm: 36 },
+              height: { xs: 34, sm: 46 },
               borderRadius: '6px',
               bgcolor: '#ffffff',
-              p: { xs: '2px 6px', sm: '3px 10px' },
+              p: { xs: '2px 4px', sm: '2px 6px' },
               boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
               border: '1px solid rgba(255,255,255,0.4)',
               flexShrink: 0,
