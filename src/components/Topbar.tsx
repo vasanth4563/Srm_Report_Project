@@ -53,46 +53,16 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
         </IconButton>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, overflow: 'hidden' }}>
-          <Box
-            component="img"
-            src="/srm_logo.jpg"
-            sx={{
-              height: { xs: 38, sm: 48 },
-              borderRadius: '6px',
-              bgcolor: '#ffffff',
-              p: { xs: '3px 8px', sm: '4px 12px' },
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.4)',
-              flexShrink: 0,
-              objectFit: 'contain'
-            }}
-          />
           <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, overflow: 'hidden' }}>
-              <Typography variant="h6" noWrap sx={{
-                fontWeight: 800,
-                color: '#ffffff',
-                fontSize: { xs: 16, sm: 20 },
-                lineHeight: 1.2,
-                letterSpacing: '-0.02em',
-              }}>
-                SRM Group of Institutions
-              </Typography>
-              <Chip
-                label="Ramapuram & Trichy"
-                size="small"
-                sx={{
-                  display: { xs: 'none', sm: 'inline-flex' },
-                  height: 22,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  background: 'rgba(255, 255, 255, 0.22)',
-                  color: '#ffffff',
-                  border: '1px solid rgba(255, 255, 255, 0.4)',
-                  backdropFilter: 'blur(8px)',
-                }}
-              />
-            </Box>
+            <Typography variant="h6" noWrap sx={{
+              fontWeight: 800,
+              color: '#ffffff',
+              fontSize: { xs: 16, sm: 20 },
+              lineHeight: 1.2,
+              letterSpacing: '-0.02em',
+            }}>
+              SRM Group of Institutions
+            </Typography>
             <Typography variant="caption" noWrap sx={{
               color: 'rgba(255, 255, 255, 0.95)',
               fontWeight: 700,
@@ -105,9 +75,38 @@ const Topbar: React.FC<TopbarProps> = ({ pageTitle, onMenuClick }) => {
                 : `${pageTitle} • Reports & Reviews`}
             </Typography>
           </Box>
+          <Box
+            component="img"
+            src="/srm_logo.jpg"
+            sx={{
+              height: { xs: 28, sm: 36 },
+              borderRadius: '6px',
+              bgcolor: '#ffffff',
+              p: { xs: '2px 6px', sm: '3px 10px' },
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              flexShrink: 0,
+              objectFit: 'contain'
+            }}
+          />
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Chip
+            label="Ramapuram & Trichy"
+            size="small"
+            sx={{
+              display: { xs: 'none', md: 'inline-flex' },
+              height: 26,
+              fontSize: 12,
+              fontWeight: 700,
+              background: 'rgba(255, 255, 255, 0.22)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              backdropFilter: 'blur(8px)',
+              mr: 1,
+            }}
+          />
           <Tooltip title={mode === 'dark' ? 'Light mode' : 'Dark mode'} arrow>
             <IconButton
               onClick={toggleColorMode}
